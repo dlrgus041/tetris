@@ -13,7 +13,16 @@ local mainGroup
 local uiGroup
 
 local background
+local board = {}
 
+local board = {}
+
+local blocks = {}
+local nextBlock
+local storedBlock
+
+local speed
+local score
 
 -- -----------------------------------------------------------------------------------
 -- Scene event functions
@@ -21,6 +30,8 @@ local background
 
 -- create()
 function scene:create( event )
+
+	print(display.content)
 
 	local sceneGroup = self.view
 	-- Code here runs when the scene is first created but has not yet appeared on screen
@@ -37,8 +48,21 @@ function scene:create( event )
 	background = display.newRect(backGroup, display.contentCenterX, display.contentCenterY, display.contentWidth, display.contentHeight)
 	background:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 
-	board = display.newRect(mainGroup, display.contentCenterX, display.contentCenterY, display.contentWidth / 2, display.contentHeight)
-	board:setFillColor(128 / 255, 128 / 255, 128 / 255, 0.8)
+	local start = display.contentWidth / 2 - display.contentHeight / 4
+	local half = display.contentHeight / 40
+
+	for col = 1, 20 do
+		local line = display.newGroup()
+		local arr = {}
+		for row = 1, 10 do
+			display.newRect(line, start + (2 * row - 1) * half, (2 * col - 1) * half, 2 * half, 2 * half)
+			arr[row] = 0
+		end
+		mainGroup:insert(line)
+		board[col] = arr
+	end
+
+	
 
 end
 
