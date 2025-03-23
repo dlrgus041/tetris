@@ -11,22 +11,15 @@ local scene = composer.newScene()
 local backGroup
 local mainGroup
 local uiGroup
-
-local background
+local pauseGroup
+local gameOverGroup
 
 local scoreVarText
 local levelVarText
 local remainVarText
 
-local pauseBackgrond
-local pauseImg
-local pauseAt
-
-local isGameOver = false
-local gmeoverAlert
-
-local board = {[-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}}
-local isFull = {}
+local board
+local count
 
 local color =
 {
@@ -42,71 +35,94 @@ local color =
 
 local pieces =
 {
-	{ -1, 0, 0,0 , 1,0, 2,0 }, -- I
-	{ -1,-1, -1,0, 0,-1, 0,0 }, -- O
-	{ -1,0, 0,0, 0,-1, 1,0 }, -- T
-	{ -1,-1, -1,0, 0,0, 1,0 }, -- J
-	{ -1,0, 0,0, 1,0, 1,-1 }, -- L
-	{ -1,0, 0,0, 0,-1, 1,-1 }, -- S
-	{ -1,-1, 0,0, 0,-1, 1,0 }, -- Z
-	{ 0,0, 0,0, 0,0, 0,0 }, -- dummy
+	{ [0] = 0, -1,0, 0,0, 1,0, 2,0 },		-- I
+	{ [0] = 0, 0,-1, 1,-1, 0,0, 1,0 },		-- O
+	{ [0] = 0, -1,0, 0,0, 0,-1, 1,0 },		-- T
+	{ [0] = 0, -1,-1, -1,0, 0,0, 1,0 },		-- J
+	{ [0] = 0, -1,0, 0,0, 1,0, 1,-1 },		-- L
+	{ [0] = 0, -1,0, 0,0, 0,-1, 1,-1 },		-- S
+	{ [0] = 0, -1,-1, 0,-1, 0,0, 1,0 },		-- Z
+	{ [0] = 0, 0,0, 0,0, 0,0, 0,0 },		-- dummy
 }
 
-local pos = {x = 0, y = 20}
-local piece = { 0,0, 0,0, 0,0, 0,0 }
+local pos
+local piece
 
-local box = {}
-local bag = {}
+local box
+local bag
 
 local gameBoardGroup
 local nextPieceGroup
 local storedPieceGroup
 
-local nextPieceArea
-local storedPieceArea
+local nowPieceId
+local nextPieceId
+local storedPieceId
 
-local nowPieceId = 8
-local nextPieceId = 8
-local storedPieceId = 1
+local changePiece
+local isFalling
 
-local changePiece = false
-local limit = 30
-local remain = 1
-local maxLine = 10
-local line = 0
-local level = 1
-local score = 0
+local limit
+local remain
+local maxLine
+local line
+local level
+local score
+
+local pauseAt
+local isGameOver
+
+local function initVariables()
+	board = {[-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}}
+	count = {}
+	pos = {x = 0, y = 20}
+	piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 }
+	box = {}
+	bag = {}
+	nowPieceId = 8
+	nextPieceId = 8
+	storedPieceId = 3
+	changePiece = false
+	isFalling = false
+	limit = 30
+	remain = 1
+	maxLine = 10
+	line = 0
+	level = 1
+	score = 0
+	pauseAt = -1
+	isGameOver = false
+end
 
 local function scanBoard()
-	local isGameOver = true
+	local ret = true
 	for col = 1, 20 do
-		isFull[col] = true
+		count[col] = 0
 		for row = 1, 10 do
-			if (board[col][row] == 8) then
-				isFull[col] = false
-				break
-			end
+			if (board[col][row] < 8) then count[col] = count[col] + 1 end
 		end
-		if (isFull[col] == true) then
+		if (count[col] == 10) then
 			score = score + 1
 			scoreVarText.text = score
 			line = line + 1
 			remainVarText.text = maxLine - line
-		elseif (isGameOver == true) then isGameOver = false end
+			if (ret == true) then ret = false end
+		elseif (count[col] == 0 and ret == true) then ret = false end
 	end
-	return isGameOver
+	return ret
 end
 
 local function rearrangeBoard()
 	for bottom = 20, 1, -1 do
-		if (isFull[bottom] == true) then
-			local target = bottom - 1
-			while (target > 0 and isFull[target] == true) do target = target - 1 end
-			if (target > 0) then
-				board[bottom] = board[target]
-				isFull[bottom] = false
-				board[target] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}
-				isFull[target] = true
+		if (count[bottom] == 0 or count[bottom] == 10) then
+			for target = bottom - 1, 1, -1 do
+				if (count[target] > 0 and count[target] < 10) then
+					board[bottom] = board[target]
+					count[bottom] = count[target]
+					board[target] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}
+					count[target] = 0
+					break
+				end
 			end
 		end
 	end
@@ -155,32 +171,90 @@ local function setPiece(n)
 	end
 end
 
-local function isPossible(dx, dy)
+local function move(dx, dy, arr)
+	local temp = {}
+	for i = 0, 8 do temp[i] = arr and arr[i] or piece[i] end
 	for i = 1, 4 do
-		local x0 = pos.x + dx + piece[2 * i - 1]
-		local y0 = pos.y + dy + piece[2 * i]
+		local x0 = pos.x + dx + temp[2 * i - 1]
+		local y0 = pos.y + dy + temp[2 * i]
 		if (y0 > 20 or x0 < 1 or x0 > 10 or board[y0][x0] < 8) then return false end
 	end
+	for i = 1, 8 do piece[i] = temp[i] end
+	pos.x, pos.y = pos.x + dx, pos.y + dy
 	return true
+end
+
+local function rotate(clockwise)
+	local temp = {[0] = piece[0]}
+	for i = 1, 4 do
+		if (clockwise == true) then
+			temp[2 * i - 1], temp[2 * i] = piece[2 * i], -piece[2 * i - 1]
+		else
+			temp[2 * i - 1], temp[2 * i] = -piece[2 * i], piece[2 * i - 1]
+		end
+	end
+
+	local test = {}
+	if (nowPieceId == 1) then
+		if (clockwise > 0) then
+			if (temp[0] == 0) then test = { 0,0, -2,0, 1,0, -2,1, 1,-2 }
+			elseif (temp[0] == 1) then test = { 0,0, -1,0, 2,0, -1,-2, 2,1 }
+			elseif (temp[0] == 2) then test = { 0,0, 2,0, -1,0, 2,-1, -1,2 }
+			else test = { 0,0, 1,0, -2,0, 1,2, -2,-1 } end
+		else
+			if (temp[0] == 0) then test = { 0,0, -1,0, 2,0, -1,-2, 2,1 }
+			elseif (temp[0] == 1) then test = { 0,0, 2,0, -1,0, 2,-1, -1,2 }
+			elseif (temp[0] == 2) then test = { 0,0, 1,0, -2,0, 1,2, -2,-1 }
+			else test = { 0,0, -2,0, 1,0, -2,1, 1,-2 } end
+		end
+	elseif (nowPieceId == 2) then
+		if (clockwise > 0) then
+			if (temp[0] == 0) then test = { 0,-1 }
+			elseif (temp[0] == 1) then test = { 1,0 }
+			elseif (temp[0] == 2) then test = { 0,1 }
+			else test = { -1,0 } end
+		else
+			if (temp[0] == 0) then test = { 1,0 }
+			elseif (temp[0] == 1) then test = { 0,1 }
+			elseif (temp[0] == 2) then test = { -1,0 }
+			else test = { 0,-1 } end
+		end
+	else
+		if (clockwise > 0) then
+			if (temp[0] == 0) then test = { 0,0, -1,0, -1,-1, 0,2, -1,2 }
+			elseif (temp[0] == 1) then test = { 0,0, 1,0, 1,1, 0,-2, 1,-2 }
+			elseif (temp[0] == 2) then test = { 0,0, 1,0, 1,-1, 0,2, 1,2 }
+			else test = { 0,0, -1,0, -1,1, 0,-2, -1,-2 } end
+		else
+			if (temp[0] == 0) then test = { 0,0, 1,0, 1,-1, 0,2, 1,2 }
+			elseif (temp[0] == 1) then test = { 0,0, -1,0, -1,1, 0,-2, -1,-2 }
+			elseif (temp[0] == 2) then test = { 0,0, -1,0, -1,-1, 0,2, -1,2 }
+			else test = { 0,0, 1,0, 1,1, 0,-2, 1,-2 } end
+		end
+	end
+
+	temp[0] = (temp[0] + clockwise) % 4
+	for i = 1, 5 do
+		if (move(test[2 * i - 1], test[2 * i], temp)) then return true end
+	end
+	return false
 end
 
 local function onKeyEvent(event)
 	if (event.phase == "down") then
 		setPiece(8)
 		if (event.keyName == "escape") then
-			if (isGameOver == false) then
+			if (isFalling == true and isGameOver == false) then
 				if (remain > 0) then
 					pauseAt, remain = remain, -1
-					pauseBackgrond.isVisible = true
-					pauseImg.isVisible = true
+					pauseGroup.isVisible = true
 				else
-					pauseImg.isVisible = false
-					pauseBackgrond.isVisible = false
+					pauseGroup.isVisible = false
 					remain = pauseAt
 				end
 			end
 		elseif (event.keyName == "leftShift" or event.keyName == "c") then
-			if (changePiece == false) then
+			if (isFalling == true and changePiece == false) then
 				paintStoredPiece(true)
 				nowPieceId, storedPieceId = storedPieceId, nowPieceId
 				pos.x, pos.y = 5, 0
@@ -189,39 +263,19 @@ local function onKeyEvent(event)
 				paintStoredPiece(false)
 			end
 		elseif (event.keyName == "space") then
-			local bottom = 0
-			while (isPossible(0, bottom + 1) == true) do bottom = bottom + 1 end
-			pos.y = pos.y + bottom
-		elseif (event.keyName == "up" or event.keyName == "x" or event.keyName == "numPad8") then
-			local left, right = 0, 0
-			for i = 1, 4 do
-				piece[2 * i - 1], piece[2 * i] = -piece[2 * i], piece[2 * i - 1]
-				left = math.min(left, piece[2 * i - 1])
-				right = math.max(right, piece[2 * i - 1])
+			if (isFalling == true) then
+				while (move(0, 1) == true) do end
 			end
-			if (pos.x + left < 1) then
-				pos.x = pos.x - left
-			elseif (pos.x + right > 10) then
-				pos.x = pos.x - right
-			end
+		elseif (event.keyName == "up") then
+			rotate(1)
 		elseif (event.keyName == "leftCtrl" or event.keyName == "z") then
-			local left, right = 0, 0
-			for i = 1, 4 do
-				piece[2 * i - 1], piece[2 * i] = piece[2 * i], -piece[2 * i - 1]
-				left = math.min(left, piece[2 * i - 1])
-				right = math.max(right, piece[2 * i - 1])
-			end
-			if (pos.x + left < 1) then
-				pos.x = pos.x - left
-			elseif (pos.x + right > 10) then
-				pos.x = pos.x - right
-			end
-		elseif (event.keyName == "down" or event.keyName == "numPad5") then
-			if (isPossible(0, 1) == true) then pos.y = pos.y + 1 end
-		elseif (event.keyName == "left" or event.keyName == "numPad4") then
-			if (isPossible(-1, 0) == true) then pos.x = pos.x - 1 end
-		elseif (event.keyName == "right" or event.keyName == "numPad6") then
-			if (isPossible(1, 0) == true) then pos.x = pos.x + 1 end
+			rotate(-1)
+		elseif (event.keyName == "down") then
+			move(0, 1)
+		elseif (event.keyName == "left") then
+			move(-1, 0)
+		elseif (event.keyName == "right") then
+			move(1, 0)
 		end
 		setPiece(nowPieceId)
 		paintBlocks()
@@ -234,19 +288,19 @@ local function onFrameEvent()
 
 	if (remain == 0) then
 		setPiece(8)
-		if (isPossible(0, 1) == false) then
+		if (move(0, 1) == false) then
 			setPiece(nowPieceId)
+			isFalling = false
 			changePiece = false
 			if (scanBoard() == false) then
 				rearrangeBoard()
 				getRandomPiece()
-				for i = 1, 8 do piece[i] = pieces[nowPieceId][i] end
+				for i = 0, 8 do piece[i] = pieces[nowPieceId][i] end
 				pos.x, pos.y = 5, 0
 			else
-				-- show 'game_over' alert
+				limit = -1
+				isGameOver = true
 			end
-		else
-			pos.y = pos.y + 1
 		end
 
 		if (line >= maxLine) then
@@ -263,6 +317,7 @@ local function onFrameEvent()
 		setPiece(nowPieceId)
 		paintBlocks()
 		remain = limit
+		isFalling = true
 	end
 end
 
@@ -276,10 +331,12 @@ function scene:create( event )
 	local sceneGroup = self.view
 	-- Code here runs when the scene is first created but has not yet appeared on screen
 
+	initVariables()
+
 	backGroup = display.newGroup()
 	sceneGroup:insert(backGroup)
 
-	background = display.newRect(backGroup, display.contentCenterX, display.contentCenterY, display.contentWidth, display.contentHeight)
+	local background = display.newRect(backGroup, display.contentCenterX, display.contentCenterY, display.contentWidth, display.contentHeight)
 	background:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 
 	mainGroup = display.newGroup()
@@ -294,28 +351,28 @@ function scene:create( event )
 	scoreBoardArea:setStrokeColor(1, 1, 1)
 	scoreBoardArea.strokeWidth = half / 2
 
-	scoreArea = display.newRoundedRect(mainGroup, x1 - 6 * half, display.contentHeight / 2 - 5 * half, 7 * half, 3 * half, 2)
+	local scoreArea = display.newRoundedRect(mainGroup, x1 - 6 * half, display.contentHeight / 2 - 5 * half, 7 * half, 3 * half, 2)
 	scoreArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 
-	scoreVarArea = display.newRoundedRect(mainGroup, x1 + 4 * half, display.contentHeight / 2 - 5 * half, 10 * half, 3 * half, 2)
+	local scoreVarArea = display.newRoundedRect(mainGroup, x1 + 4 * half, display.contentHeight / 2 - 5 * half, 10 * half, 3 * half, 2)
 	scoreVarArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 
-	levelArea = display.newRoundedRect(mainGroup, x1 - 6 * half, display.contentHeight / 2, 7 * half, 3 * half, 2)
+	local levelArea = display.newRoundedRect(mainGroup, x1 - 6 * half, display.contentHeight / 2, 7 * half, 3 * half, 2)
 	levelArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 
-	levelVarArea = display.newRoundedRect(mainGroup, x1 + 4 * half, display.contentHeight / 2, 10 * half, 3 * half, 2)
+	local levelVarArea = display.newRoundedRect(mainGroup, x1 + 4 * half, display.contentHeight / 2, 10 * half, 3 * half, 2)
 	levelVarArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 
-	remainArea = display.newRoundedRect(mainGroup, x1 - 6 * half, display.contentHeight / 2 + 5 * half, 7 * half, 3 * half, 2)
+	local remainArea = display.newRoundedRect(mainGroup, x1 - 6 * half, display.contentHeight / 2 + 5 * half, 7 * half, 3 * half, 2)
 	remainArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 
-	remainVarArea = display.newRoundedRect(mainGroup, x1 + 4 * half, display.contentHeight / 2 + 5 * half, 10 * half, 3 * half, 2)
+	local remainVarArea = display.newRoundedRect(mainGroup, x1 + 4 * half, display.contentHeight / 2 + 5 * half, 10 * half, 3 * half, 2)
 	remainVarArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 
-	nextPieceArea = display.newRoundedRect(mainGroup, x2, display.contentHeight / 4, 12 * half, 12 * half, 12)
+	local nextPieceArea = display.newRoundedRect(mainGroup, x2, display.contentHeight / 4, 12 * half, 12 * half, 12)
 	nextPieceArea:setFillColor(1, 1, 1)
 
-	storedPieceArea = display.newRoundedRect(mainGroup, x2, 3 * display.contentHeight / 4, 12 * half, 12 * half, 12)
+	local storedPieceArea = display.newRoundedRect(mainGroup, x2, 3 * display.contentHeight / 4, 12 * half, 12 * half, 12)
 	storedPieceArea:setFillColor(1, 1, 1)
 
 	gameBoardGroup = display.newGroup()
@@ -334,7 +391,7 @@ function scene:create( event )
 		end
 		gameBoardGroup:insert(line)
 		board[col] = arr
-		isFull[col] = false
+		count[col] = 0
 	end
 
 	nextPieceGroup = display.newGroup()
@@ -448,7 +505,7 @@ function scene:create( event )
 
 	local storedPieceText = display.newText({
 		parent = uiGroup,
-		text = "STORAGE",
+		text = "HOLD",
 		x = x2,
 		y = 3 * display.contentHeight / 4 - 8 * half,
 		font = native.systemFont,
@@ -457,15 +514,28 @@ function scene:create( event )
 	})
 	storedPieceText:setFillColor(0, 0, 0)
 
-	pauseBackgrond = display.newRect(uiGroup, display.contentCenterX, display.contentCenterY, display.contentWidth, display.contentHeight)
-	pauseBackgrond:setFillColor(1, 1, 1, 0.4)
-	pauseBackgrond.isVisible = false
+	pauseGroup = display.newGroup()
+	sceneGroup:insert(pauseGroup)
 
-	pauseImg = display.newImageRect(uiGroup, "pause.png", display.contentHeight / 2, display.contentHeight / 2)
+	local pauseBackground = display.newRect(pauseGroup, display.contentCenterX, display.contentCenterY, display.contentWidth, display.contentHeight)
+	pauseBackground:setFillColor(1, 1, 1, 0.4)
+
+	local pauseImg = display.newImageRect(pauseGroup, "pause.png", display.contentHeight / 2, display.contentHeight / 2)
 	pauseImg.x = display.contentCenterX
 	pauseImg.y = display.contentCenterY
 	pauseImg.alpha = 0.8
-	pauseImg.isVisible = false
+
+	gameOverGroup = display.newGroup()
+	sceneGroup:insert(gameOverGroup)
+
+	local gameOverBackground = display.newRect(gameOverGroup, display.contentCenterX, display.contentCenterY, display.contentWidth, display.contentHeight)
+	gameOverBackground:setFillColor(0, 0, 0, 0.4)
+
+	local gameOverAlert = display.newRoundedRect(gameOverGroup, display.contentCenterX, display.contentCenterY, display.contentWidth / 2, display.contentWidth / 2, 20)
+	gameOverAlert.alpha = 0.8
+
+	pauseGroup.isVisible = false
+	gameOverGroup.isVisible = false
 
 	getRandomPiece()
 	paintStoredPiece(false)
