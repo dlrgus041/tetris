@@ -21,11 +21,11 @@ local localCoopButton
 local function singlePlay(event)
 	if (event.isPrimaryButtonDown) then composer.gotoScene("single") end
 end
---[[
+
 local function localPVP(event)
 	if (event.isPrimaryButtonDown) then composer.gotoScene("pvp") end
 end
-
+--[[
 local function localCoop(event)
 	if (event.isPrimaryButtonDown) then composer.gotoScene("coop") end
 end
@@ -46,16 +46,16 @@ function scene:create( event )
 	local backgronud = display.newRect(mainGroup, WIDTH / 2, HEIGHT / 2, WIDTH, HEIGHT)
 	backgronud:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 
-	local singlePlayButtonArea = display.newRoundedRect(mainGroup, WIDTH / 2, 5 * HEIGHT / 8, WIDTH / 3, HEIGHT / 10, 10)
-	singlePlayButtonArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
+	singlePlayButton = display.newRoundedRect(mainGroup, WIDTH / 2, 5 * HEIGHT / 8, WIDTH / 3, HEIGHT / 10, 10)
+	singlePlayButton:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 
-	local localPVPButtonArea = display.newRoundedRect(mainGroup, WIDTH / 2, 3 * HEIGHT / 4, WIDTH / 3, HEIGHT / 10, 10)
-	localPVPButtonArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
+	localPVPButton = display.newRoundedRect(mainGroup, WIDTH / 2, 3 * HEIGHT / 4, WIDTH / 3, HEIGHT / 10, 10)
+	localPVPButton:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 
-	local localCoopButtonArea = display.newRoundedRect(mainGroup, WIDTH / 2, 7 * HEIGHT / 8, WIDTH / 3, HEIGHT / 10, 10)
-	localCoopButtonArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
+	localCoopButton = display.newRoundedRect(mainGroup, WIDTH / 2, 7 * HEIGHT / 8, WIDTH / 3, HEIGHT / 10, 10)
+	localCoopButton:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 
-	local mainTitle = display.newText({
+	local mainTitleString = display.newText({
 		parent = mainGroup,
 		text = "T E T R I S",
 		x = WIDTH / 2,
@@ -64,9 +64,9 @@ function scene:create( event )
 		fontSize = 100,
 		align = "center"
 	})
-	mainTitle:setFillColor(0, 0, 0)
+	mainTitleString:setFillColor(0, 0, 0)
 
-	singlePlayButton = display.newText({
+	local singlePlayString = display.newText({
 		parent = mainGroup,
 		text = "Single Play",
 		x = WIDTH / 2,
@@ -75,9 +75,9 @@ function scene:create( event )
 		fontSize = 50,
 		align = "center"
 	})
-	singlePlayButton:setFillColor(0, 0, 0)
+	singlePlayString:setFillColor(0, 0, 0)
 
-	localPVPButton = display.newText({
+	local localPVPString = display.newText({
 		parent = mainGroup,
 		text = "Local PVP",
 		x = WIDTH / 2,
@@ -86,9 +86,9 @@ function scene:create( event )
 		fontSize = 50,
 		align = "center"
 	})
-	localPVPButton:setFillColor(0, 0, 0)
+	localPVPString:setFillColor(0, 0, 0)
 
-	localCoopButton = display.newText({
+	local localCoopString = display.newText({
 		parent = mainGroup,
 		text = "Local Co-op",
 		x = WIDTH / 2,
@@ -97,10 +97,10 @@ function scene:create( event )
 		fontSize = 50,
 		align = "center"
 	})
-	localCoopButton:setFillColor(0, 0, 0)
+	local localCoopString:setFillColor(0, 0, 0)
 
 	singlePlayButton:addEventListener("mouse", singlePlay)
---	localPVPButton:addEventListener("mouse", localPVP)
+	localPVPButton:addEventListener("mouse", localPVP)
 --	localCoopButton:addEventListener("mouse", localCoop)
 end
 

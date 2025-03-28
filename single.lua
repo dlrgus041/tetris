@@ -11,15 +11,18 @@ local scene = composer.newScene()
 local WIDTH = display.contentWidth
 local HEIGHT = display.contentHeight
 
+local action
+local delay
+
 local backGroup
 local mainGroup
 local uiGroup
 local pauseGroup
 local gameOverGroup
 
-local scoreVarText
 local levelVarText
-local remainVarText
+local linesVarText
+local scoreVarText
 
 local gameOverTitle
 local finalScoreText
@@ -71,36 +74,36 @@ local storedPieceId
 local changePiece
 local isFalling
 
-local limit
 local remain
-local maxLine
 local line
 local level
 local score
 
 local pauseAt
-local isGameOver
+local isComplete
 
 local function backToMain(event)
 	if (event.isPrimaryButtonDown) then composer.gotoScene("title") end
 end
 
-local function scanAndCheck()
-	local ret = true
+local function isGameOver()
+	for row = 1, 10 do
+		if (board[0][row] < 8) then return true end
+	end
+	return false
+end
+
+local function scanBoard()
 	for col = 1, 20 do
 		count[col] = 0
 		for row = 1, 10 do
 			if (board[col][row] < 8) then count[col] = count[col] + 1 end
 		end
 		if (count[col] == 10) then
-			score = score + 1
-			scoreVarText.text = score
 			line = line + 1
-			remainVarText.text = maxLine - line
-			if (ret == true) then ret = false end
-		elseif (count[col] == 0 and ret == true) then ret = false end
+			linesVarText.text = line
+		end
 	end
-	return ret
 end
 
 local function rearrangeBoard()
@@ -119,7 +122,7 @@ local function rearrangeBoard()
 	end
 end
 
-local function paintBlocks()
+local function paintBoard()
 	for col = 1, 20 do
 		for row = 1, 10 do
 			local rgb = color[board[col][row]]
@@ -128,22 +131,22 @@ local function paintBlocks()
 	end
 end
 
-local function paintNextPiece(clear)
-	local rgb = color[clear == true and 8 or nextPieceId]
+local function paintNextPiece(flag)
+	local rgb = color[flag == true and nextPieceId or 8]
 	for i = 1, 4 do
 		nextPieceGroup[3 + pieces[nextPieceId][2 * i]][3 + pieces[nextPieceId][2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3])
 	end
 end
 
-local function paintStoredPiece(clear)
-	local rgb = color[clear == true and 8 or storedPieceId]
+local function paintStoredPiece(flag)
+	local rgb = color[flag == true and storedPieceId or 8]
 	for i = 1, 4 do
 		storedPieceGroup[3 + pieces[storedPieceId][2 * i]][3 + pieces[storedPieceId][2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3])
 	end
 end
 
 local function getRandomPiece()
-	paintNextPiece(true)
+	paintNextPiece(false)
 	if (#bag == 0) then
 		for i = 1, 7 do
 			bag[i] = i
@@ -153,12 +156,12 @@ local function getRandomPiece()
 	end
 	nowPieceId = nextPieceId
 	nextPieceId = table.remove(bag)
-	paintNextPiece(false)
+	paintNextPiece(true)
 end
 
-local function setPiece(n)
+local function setPiece(flag)
 	for i = 1, 4 do
-		board[pos.y + piece[2 * i]][pos.x + piece[2 * i - 1]] = n
+		board[pos.y + piece[2 * i]][pos.x + piece[2 * i - 1]] = flag and nowPieceId or 8
 	end
 end
 
@@ -231,12 +234,13 @@ local function rotate(clockwise)
 	return false
 end
 
+--[[
 local function onKeyEvent(event)
 	if (gameOverGroup.isVisible == false) then
+		setPiece(8)
 		if (event.phase == "down") then
-			setPiece(8)
 			if (event.keyName == "escape") then
-				if (isFalling == true and isGameOver == false) then
+				if (isFalling == true) then
 					if (remain > 0) then
 						pauseAt, remain = remain, -1
 						pauseGroup.isVisible = true
@@ -251,7 +255,7 @@ local function onKeyEvent(event)
 					nowPieceId, storedPieceId = storedPieceId, nowPieceId
 					pos.x, pos.y = 5, 0
 					changePiece = true
-					for i = 1, 8 do piece[i] = pieces[nowPieceId][i] end
+					for i = 0, 8 do piece[i] = pieces[nowPieceId][i] end
 					paintStoredPiece(false)
 				end
 			elseif (event.keyName == "space") then
@@ -263,15 +267,92 @@ local function onKeyEvent(event)
 			elseif (event.keyName == "leftCtrl" or event.keyName == "z") then
 				rotate(-1)
 			elseif (event.keyName == "down") then
-				move(0, 1)
+				timer.resume(downTimer)
 			elseif (event.keyName == "left") then
-				move(-1, 0)
+				timer.resume(leftTimer)
 			elseif (event.keyName == "right") then
-				move(1, 0)
+				timer.resume(rightTimer)
 			end
-			setPiece(nowPieceId)
-			paintBlocks()
+		else
+			if (event.keyName == "down") then
+				timer.pause(downTimer)
+			elseif (event.keyName == "left") then
+				timer.pause(leftTimer)
+			elseif (event.keyName == "right") then
+				timer.pause(rightTimer)
+			end
 		end
+		setPiece(nowPieceId)
+		paintBoard()
+	end
+end
+]]--
+
+local function onKeyEvent(event)
+	if (gameOverGroup.isVisible == false) then
+		if (event.phase == "down") then
+			if (event.keyName == "down" or event.keyName == "left" or event.keyName == "right") then
+				action[event.keyName] = true
+			elseif (event.keyName == "escape") then
+				if (isFalling == true) then
+					if (remain > 0) then
+						pauseAt, remain = remain, -1
+						pauseGroup.isVisible = true
+					else
+						pauseGroup.isVisible = false
+						remain = pauseAt
+					end
+				end
+			elseif (event.keyName == "leftShift" or event.keyName == "c") then
+				if (isFalling == true and changePiece == false) then
+					setPiece(false)
+					paintStoredPiece(false)
+					nowPieceId, storedPieceId = storedPieceId, nowPieceId
+					pos.x, pos.y = 5, 0
+					changePiece = true
+					for i = 0, 8 do piece[i] = pieces[nowPieceId][i] end
+					paintStoredPiece(true)
+					setPiece(true)
+				end
+			elseif (event.keyName == "space") then
+				if (isFalling == true) then
+					setPiece(false)
+					while (move(0, 1) == true) do end
+					setPiece(true)
+				end
+			elseif (event.keyName == "up") then
+				setPiece(false)
+				rotate(1)
+				setPiece(true)
+			elseif (event.keyName == "leftCtrl" or event.keyName == "z") then
+				setPiece(false)
+				rotate(-1)
+				setPiece(true)
+			end
+		elseif (event.keyName == "down" or event.keyName == "left" or event.keyName == "right") then
+			action[event.keyName] = false
+		end
+	end
+end
+
+local function handleKeyboard()
+
+	delay = delay - 1
+
+	if (delay == 0) then
+		setPiece(false)
+		if action["down"] then
+			move(0, 1)
+		end
+		if action["left"] then
+			move(-1, 0)
+		end
+		if action["right"] then
+			move(1, 0)
+		end
+		setPiece(true)
+		paintBoard()
+		delay = 5 - math.floor(level / 6)
 	end
 end
 
@@ -279,56 +360,44 @@ local function onFrameEvent()
 
 	remain = remain - 1
 
-	if (remain == 0) then
-		if (limit == 10) then
-			gameOverTitle.text = isGameOver and "Game Over" or "Game Clear"
-			finalScoreText.text = score
-			gameOverGroup.isVisible = true
-			limit = -1
-		elseif (limit < 0) then
-			if (isGameOver == true) then
+	if (level == 31) then
+		gameOverTitle.text = isComplete and "Game Clear" or "Game Over"
+		finalScoreText.text = score
+		gameOverGroup.isVisible = true
+	elseif (remain == 0) then
+		setPiece(false)
+		if (move(0, 1) == false) then
+			setPiece(true)
+			isFalling = false
+			changePiece = false
+			scanBoard()
+			if (isGameOver() == true) then
+				isComplete = false
+				level = 31
 			else
+				rearrangeBoard()
+				getRandomPiece()
+				for i = 0, 8 do piece[i] = pieces[nowPieceId][i] end
+				pos.x, pos.y = 5, 0
 			end
-		else
-			setPiece(8)
-			if (move(0, 1) == true) then
-			else
-				setPiece(nowPieceId)
-				isFalling = false
-				changePiece = false
-				if (scanAndCheck() == true) then
-					isGameOver = true
-					limit = 10
-				else
-					rearrangeBoard()
-					getRandomPiece()
-					for i = 0, 8 do piece[i] = pieces[nowPieceId][i] end
-					pos.x, pos.y = 5, 0
-				end
-			end
-
-			if (line >= maxLine) then
-				line = line - maxLine
-				maxLine = maxLine + 5
-				remainVarText.text = maxLine - line
-	
-				level = level + 1
-				levelVarText.text = level
-	
-				limit = limit - 2
-			end
-
-			setPiece(nowPieceId)
-			paintBlocks()
-			isFalling = true
 		end
-		
-		remain = limit
+
+		if (line >= 5 * level) then
+			level = level + 1
+			levelVarText.text = level
+		end
+
+		setPiece(true)
+		paintBoard()
+		remain = 31 - level
+		isFalling = true
 	end
 end
 
 local function initVariables()
-	board = {[-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}}
+	action = {}
+	delay = 1
+	board = {[-2] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}}
 	count = {}
 	pos = {x = 0, y = 20}
 	piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 }
@@ -339,14 +408,12 @@ local function initVariables()
 	storedPieceId = 3
 	changePiece = false
 	isFalling = false
-	limit = 30
 	remain = 1
-	maxLine = 10
 	line = 0
 	level = 1
 	score = 0
 	pauseAt = -1
-	isGameOver = false
+	isComplete = true
 end
 
 local function initPiece()
@@ -357,7 +424,7 @@ local function initPiece()
 		count[col] = 0
 	end
 	getRandomPiece()
-	paintStoredPiece(false)
+	paintStoredPiece(true)
 end
 
 local function replay(event)
@@ -466,34 +533,11 @@ function scene:create( event )
 	uiGroup = display.newGroup()
 	sceneGroup:insert(uiGroup)
 
-	local scoreText = display.newText({
-		parent = uiGroup,
-		text = "LINES",
-		x = x1 - 6 * half,
-		y = HEIGHT / 2 - 5 * half,
-		font = native.systemFont,
-		fontSize = 30,
-		align = "center"
-	})
-	scoreText:setFillColor(0, 0, 0)
-
-	scoreVarText = display.newText({
-		parent = uiGroup,
-		text = "0",
-		x = x1 + 4 * half,
-		y = HEIGHT / 2 - 5 * half,
-		font = native.systemFont,
-		fontSize = 30,
-		align = "right",
-		width = 9 * half
-	})
-	scoreVarText:setFillColor(0, 0, 0)
-
 	local levelText = display.newText({
 		parent = uiGroup,
 		text = "LEVEL",
 		x = x1 - 6 * half,
-		y = HEIGHT / 2,
+		y = HEIGHT / 2 - 5 * half,
 		font = native.systemFont,
 		fontSize = 30,
 		align = "center"
@@ -504,7 +548,7 @@ function scene:create( event )
 		parent = uiGroup,
 		text = "1",
 		x = x1 + 4 * half,
-		y = HEIGHT / 2,
+		y = HEIGHT / 2 - 5 * half,
 		font = native.systemFont,
 		fontSize = 30,
 		align = "right",
@@ -512,20 +556,43 @@ function scene:create( event )
 	})
 	levelVarText:setFillColor(0, 0, 0)
 
-	local remainText = display.newText({
+	local linesText = display.newText({
 		parent = uiGroup,
-		text = "REMAIN",
+		text = "LINES",
+		x = x1 - 6 * half,
+		y = HEIGHT / 2,
+		font = native.systemFont,
+		fontSize = 30,
+		align = "center"
+	})
+	linesText:setFillColor(0, 0, 0)
+
+	linesVarText = display.newText({
+		parent = uiGroup,
+		text = "0",
+		x = x1 + 4 * half,
+		y = HEIGHT / 2,
+		font = native.systemFont,
+		fontSize = 30,
+		align = "right",
+		width = 9 * half
+	})
+	linesVarText:setFillColor(0, 0, 0)
+
+	local scoreText = display.newText({
+		parent = uiGroup,
+		text = "SCORE",
 		x = x1 - 6 * half,
 		y = HEIGHT / 2 + 5 * half,
 		font = native.systemFont,
 		fontSize = 30,
 		align = "center"
 	})
-	remainText:setFillColor(0, 0, 0)
+	scoreText:setFillColor(0, 0, 0)
 
-	remainVarText = display.newText({
+	scoreVarText = display.newText({
 		parent = uiGroup,
-		text = "10",
+		text = "0",
 		x = x1 + 4 * half,
 		y = HEIGHT / 2 + 5 * half,
 		font = native.systemFont,
@@ -533,7 +600,7 @@ function scene:create( event )
 		align = "right",
 		width = 9 * half
 	})
-	remainVarText:setFillColor(0, 0, 0)
+	scoreVarText:setFillColor(0, 0, 0)
 
 	local nextPieceText = display.newText({
 		parent = uiGroup,
@@ -586,13 +653,13 @@ function scene:create( event )
 	finalScoreVarArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 	finalScoreVarArea.alpha = 0.8
 
-	local ReplayButtonArea = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2 + WIDTH / 8, 16 * half, 6 * half, 10)
-	ReplayButtonArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
-	ReplayButtonArea.alpha = 0.8
+	replayButton = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2 + WIDTH / 8, 16 * half, 6 * half, 10)
+	replayButton:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
+	replayButton.alpha = 0.8
 
-	local backMainButtonArea = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2 + WIDTH / 8, 16 * half, 6 * half, 10)
-	backMainButtonArea:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
-	backMainButtonArea.alpha = 0.8
+	backMainButton = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2 + WIDTH / 8, 16 * half, 6 * half, 10)
+	backMainButton:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
+	backMainButton.alpha = 0.8
 
 	gameOverTitle = display.newText({
 		parent = gameOverGroup,
@@ -627,7 +694,7 @@ function scene:create( event )
 	})
 	finalScoreText:setFillColor(0, 0, 0)
 
-	replayButton = display.newText({
+	local replayText = display.newText({
 		parent = gameOverGroup,
 		text = "REPLAY",
 		x = 3 * WIDTH / 8,
@@ -636,9 +703,9 @@ function scene:create( event )
 		fontSize = 50,
 		align = "center"
 	})
-	replayButton:setFillColor(0, 0, 0)
+	replayText:setFillColor(0, 0, 0)
 
-	backMainButton = display.newText({
+	local backMainText = display.newText({
 		parent = gameOverGroup,
 		text = "MAIN",
 		x = 5 * WIDTH / 8,
@@ -647,7 +714,7 @@ function scene:create( event )
 		fontSize = 50,
 		align = "center"
 	})
-	backMainButton:setFillColor(0, 0, 0)
+	backMainText:setFillColor(0, 0, 0)
 
 	pauseGroup.isVisible = false
 	gameOverGroup.isVisible = false
@@ -672,6 +739,7 @@ function scene:show( event )
 		backMainButton:addEventListener("mouse", backToMain)
 		Runtime:addEventListener("key", onKeyEvent)
 		Runtime:addEventListener("enterFrame", onFrameEvent)
+		Runtime:addEventListener("enterFrame", handleKeyboard)
 	end
 end
 
