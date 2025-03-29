@@ -16,6 +16,7 @@ local delay
 
 local backGroup
 local mainGroup
+-- local lineGroup
 local uiGroup
 local pauseGroup
 local gameOverGroup
@@ -31,7 +32,7 @@ local replayButton
 local backMainButton
 
 local board
-local count
+local isEmpty
 
 local color =
 {
@@ -57,6 +58,7 @@ local pieces =
 	{ [0] = 0, 0,0, 0,0, 0,0, 0,0 },		-- dummy
 }
 
+local ghostY
 local pos
 local piece
 
@@ -82,6 +84,39 @@ local score
 local pauseAt
 local isComplete
 
+local function checkGhost()
+	for i = 1, 4 do
+		local x0 = pos.x + piece[2 * i - 1]
+		local y0 = ghostY + piece[2 * i]
+		print("x0: " .. x0 .. ", y0: " .. y0 .. ", ghostY: " .. ghostY)
+		if (y0 > 20 or board[y0][x0] < 8) then return false end
+	end
+	return true
+end
+
+local function paintGhost(flag)
+	if (flag == true) then
+		ghostY = pos.y + 1
+		while (checkGhost() == true) do ghostY = ghostY + 1 end
+		ghostY = ghostY - 1
+	end
+	local rgb = color[flag == true and nowPieceId or 8]
+	for i = 1, 4 do
+		if (ghostY + piece[2 * i] > 0) then
+			gameBoardGroup[ghostY + piece[2 * i]][pos.x + piece[2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3], flag and 0.2 or 1)
+		end
+	end
+end
+
+local function paintNowPiece(flag)
+	local rgb = color[flag == true and nowPieceId or 8]
+	for i = 1, 4 do
+		if (pos.y + piece[2 * i] > 0) then
+			gameBoardGroup[pos.y + piece[2 * i]][pos.x + piece[2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3], 1)
+		end
+	end
+end
+
 local function backToMain(event)
 	if (event.isPrimaryButtonDown) then composer.gotoScene("title") end
 end
@@ -95,26 +130,29 @@ end
 
 local function scanBoard()
 	for col = 1, 20 do
-		count[col] = 0
+		local count = 0
 		for row = 1, 10 do
-			if (board[col][row] < 8) then count[col] = count[col] + 1 end
+			if (board[col][row] < 8) then count = count + 1 end
 		end
-		if (count[col] == 10) then
+		if (count == 10) then
 			line = line + 1
-			linesVarText.text = line
+			count = 0
 		end
+		isEmpty[col] = (count == 0)
 	end
+	linesVarText.text = line
 end
 
 local function rearrangeBoard()
-	for bottom = 20, 1, -1 do
-		if (count[bottom] == 0 or count[bottom] == 10) then
-			for target = bottom - 1, 1, -1 do
-				if (count[target] > 0 and count[target] < 10) then
-					board[bottom] = board[target]
-					count[bottom] = count[target]
-					board[target] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}
-					count[target] = 0
+	for down = 20, 1, -1 do
+		if (isEmpty[down] == true) then
+			for up = down - 1, 1, -1 do
+				if (isEmpty[up] == false) then
+					for row = 1, 10 do
+						board[down][row] = board[up][row]
+						board[up][row] = 8
+					end
+					isEmpty[down], isEmpty[up] = false, true
 					break
 				end
 			end
@@ -159,9 +197,9 @@ local function getRandomPiece()
 	paintNextPiece(true)
 end
 
-local function setPiece(flag)
+local function setPiece()
 	for i = 1, 4 do
-		board[pos.y + piece[2 * i]][pos.x + piece[2 * i - 1]] = flag and nowPieceId or 8
+		board[pos.y + piece[2 * i]][pos.x + piece[2 * i - 1]] = nowPieceId
 	end
 end
 
@@ -234,60 +272,6 @@ local function rotate(clockwise)
 	return false
 end
 
---[[
-local function onKeyEvent(event)
-	if (gameOverGroup.isVisible == false) then
-		setPiece(8)
-		if (event.phase == "down") then
-			if (event.keyName == "escape") then
-				if (isFalling == true) then
-					if (remain > 0) then
-						pauseAt, remain = remain, -1
-						pauseGroup.isVisible = true
-					else
-						pauseGroup.isVisible = false
-						remain = pauseAt
-					end
-				end
-			elseif (event.keyName == "leftShift" or event.keyName == "c") then
-				if (isFalling == true and changePiece == false) then
-					paintStoredPiece(true)
-					nowPieceId, storedPieceId = storedPieceId, nowPieceId
-					pos.x, pos.y = 5, 0
-					changePiece = true
-					for i = 0, 8 do piece[i] = pieces[nowPieceId][i] end
-					paintStoredPiece(false)
-				end
-			elseif (event.keyName == "space") then
-				if (isFalling == true) then
-					while (move(0, 1) == true) do end
-				end
-			elseif (event.keyName == "up") then
-				rotate(1)
-			elseif (event.keyName == "leftCtrl" or event.keyName == "z") then
-				rotate(-1)
-			elseif (event.keyName == "down") then
-				timer.resume(downTimer)
-			elseif (event.keyName == "left") then
-				timer.resume(leftTimer)
-			elseif (event.keyName == "right") then
-				timer.resume(rightTimer)
-			end
-		else
-			if (event.keyName == "down") then
-				timer.pause(downTimer)
-			elseif (event.keyName == "left") then
-				timer.pause(leftTimer)
-			elseif (event.keyName == "right") then
-				timer.pause(rightTimer)
-			end
-		end
-		setPiece(nowPieceId)
-		paintBoard()
-	end
-end
-]]--
-
 local function onKeyEvent(event)
 	if (gameOverGroup.isVisible == false) then
 		if (event.phase == "down") then
@@ -305,29 +289,37 @@ local function onKeyEvent(event)
 				end
 			elseif (event.keyName == "leftShift" or event.keyName == "c") then
 				if (isFalling == true and changePiece == false) then
-					setPiece(false)
+					paintNowPiece(false)
+					paintGhost(false)
 					paintStoredPiece(false)
 					nowPieceId, storedPieceId = storedPieceId, nowPieceId
 					pos.x, pos.y = 5, 0
 					changePiece = true
 					for i = 0, 8 do piece[i] = pieces[nowPieceId][i] end
 					paintStoredPiece(true)
-					setPiece(true)
+					paintGhost(true)
+					paintNowPiece(true)
 				end
 			elseif (event.keyName == "space") then
 				if (isFalling == true) then
-					setPiece(false)
+					paintNowPiece(false)
+					paintGhost(false)
 					while (move(0, 1) == true) do end
-					setPiece(true)
+					paintGhost(true)
+					paintNowPiece(true)
 				end
 			elseif (event.keyName == "up") then
-				setPiece(false)
+				paintNowPiece(false)
+				paintGhost(false)
 				rotate(1)
-				setPiece(true)
+				paintGhost(true)
+				paintNowPiece(true)
 			elseif (event.keyName == "leftCtrl" or event.keyName == "z") then
-				setPiece(false)
+				paintNowPiece(false)
+				paintGhost(false)
 				rotate(-1)
-				setPiece(true)
+				paintGhost(true)
+				paintNowPiece(true)
 			end
 		elseif (event.keyName == "down" or event.keyName == "left" or event.keyName == "right") then
 			action[event.keyName] = false
@@ -340,19 +332,28 @@ local function handleKeyboard()
 	delay = delay - 1
 
 	if (delay == 0) then
-		setPiece(false)
 		if action["down"] then
+			paintNowPiece(false)
+			paintGhost(false)
 			move(0, 1)
+			paintGhost(true)
+			paintNowPiece(true)
 		end
 		if action["left"] then
+			paintNowPiece(false)
+			paintGhost(false)
 			move(-1, 0)
+			paintGhost(true)
+			paintNowPiece(true)
 		end
 		if action["right"] then
+			paintNowPiece(false)
+			paintGhost(false)
 			move(1, 0)
+			paintGhost(true)
+			paintNowPiece(true)
 		end
-		setPiece(true)
-		paintBoard()
-		delay = 5 - math.floor(level / 6)
+		delay = 3
 	end
 end
 
@@ -365,9 +366,11 @@ local function onFrameEvent()
 		finalScoreText.text = score
 		gameOverGroup.isVisible = true
 	elseif (remain == 0) then
-		setPiece(false)
+		paintNowPiece(false)
 		if (move(0, 1) == false) then
-			setPiece(true)
+			paintGhost(false)
+			setPiece()
+--			paintNowPiece(true)
 			isFalling = false
 			changePiece = false
 			scanBoard()
@@ -376,9 +379,11 @@ local function onFrameEvent()
 				level = 31
 			else
 				rearrangeBoard()
+				paintBoard()
 				getRandomPiece()
 				for i = 0, 8 do piece[i] = pieces[nowPieceId][i] end
 				pos.x, pos.y = 5, 0
+				paintGhost(true)
 			end
 		end
 
@@ -387,8 +392,7 @@ local function onFrameEvent()
 			levelVarText.text = level
 		end
 
-		setPiece(true)
-		paintBoard()
+		paintNowPiece(true)
 		remain = 31 - level
 		isFalling = true
 	end
@@ -398,8 +402,9 @@ local function initVariables()
 	action = {}
 	delay = 1
 	board = {[-2] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}}
-	count = {}
-	pos = {x = 0, y = 20}
+	isEmpty = {}
+	ghostY = 20
+	pos = {x = 5, y = 20}
 	piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 }
 	box = {}
 	bag = {}
@@ -421,7 +426,6 @@ local function initPiece()
 		local arr = {}
 		for row = 1, 10 do arr[row] = 8 end
 		board[col] = arr
-		count[col] = 0
 	end
 	getRandomPiece()
 	paintStoredPiece(true)
@@ -488,6 +492,13 @@ function scene:create( event )
 
 	local storedPieceArea = display.newRoundedRect(mainGroup, x2, 3 * HEIGHT / 4, 12 * half, 12 * half, 12)
 	storedPieceArea:setFillColor(1, 1, 1)
+
+--	lineClearGroup = display.newGroup()
+--	mainGroup:insert(lineClearGroup)
+
+--	for col = 1, 20 do
+--		local line = display.newRect(lineClearGroup, WIDTH / 2, (2 * col - 1) * half, HEIGHT / 4, 2 * half)
+--	end
 
 	gameBoardGroup = display.newGroup()
 	mainGroup:insert(gameBoardGroup)
