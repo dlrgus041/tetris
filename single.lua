@@ -24,6 +24,7 @@ local gameOverGroup
 local levelVarText
 local linesVarText
 local scoreVarText
+local clearInfoText
 
 local gameOverTitle
 local finalScoreText
@@ -32,7 +33,7 @@ local replayButton
 local backMainButton
 
 local board
-local isEmpty
+local count
 
 local color =
 {
@@ -81,6 +82,9 @@ local line
 local level
 local score
 
+local combo
+local b2b
+
 local pauseAt
 local isComplete
 
@@ -88,7 +92,6 @@ local function checkGhost()
 	for i = 1, 4 do
 		local x0 = pos.x + piece[2 * i - 1]
 		local y0 = ghostY + piece[2 * i]
-		print("x0: " .. x0 .. ", y0: " .. y0 .. ", ghostY: " .. ghostY)
 		if (y0 > 20 or board[y0][x0] < 8) then return false end
 	end
 	return true
@@ -128,35 +131,60 @@ local function isGameOver()
 	return false
 end
 
-local function scanBoard()
+local function calculate()
+	
+	local erase, perfect = 0, true
 	for col = 1, 20 do
-		local count = 0
-		for row = 1, 10 do
-			if (board[col][row] < 8) then count = count + 1 end
+		if (count[col] == 10) then
+			erase = erase + 1
+		else
+			perfect = false
 		end
-		if (count == 10) then
-			line = line + 1
-			count = 0
-		end
-		isEmpty[col] = (count == 0)
 	end
+
+	if (erase > 0) then
+
+		line = line + erase
+		linesVarText.text = line
+
+		clearInfoText.text = erase == 4 and "TETRIS" or erase == 3 and "TRIPLE" or erase == 2 and "DOUBLE" or "SINGLE"
+		clearInfoText.alpha = 1
+		transition.fadeOut(clearInfoText, {time = 1000})
+
+		score = score + 100 * erase + 200 * combo + 400 * b2b + (perfect and 1000 or 0)
+		scoreVarText.text = score
+
+		combo = combo + 1
+		b2b = erase < 4 and 0 or b2b + 1
+	else
+		combo, b2b = 0, 0
+	end
+
 	linesVarText.text = line
 end
 
-local function rearrangeBoard()
-	for down = 20, 1, -1 do
-		if (isEmpty[down] == true) then
-			for up = down - 1, 1, -1 do
-				if (isEmpty[up] == false) then
-					for row = 1, 10 do
-						board[down][row] = board[up][row]
-						board[up][row] = 8
-					end
-					isEmpty[down], isEmpty[up] = false, true
-					break
-				end
-			end
+local function scanBoard()
+	for col = 1, 20 do
+		count[col] = 0
+		for row = 1, 10 do
+			if (board[col][row] < 8) then count[col] = count[col] + 1 end
 		end
+	end
+end
+
+local function rearrangeBoard()
+	local temp = {}
+	for i = 1, 20 do temp[i] = i end
+	for col = 20, 1, -1 do
+		if (count[col] == 10) then table.remove(temp, col) end
+	end
+	for i = 0, #temp - 1 do
+		board[#count - i] = board[temp[#temp - i]]
+		count[#count - i] = count[temp[#temp - i]]
+	end
+	for i = 1, #count - #temp do
+		board[i] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}
+		count[i] = 0
 	end
 end
 
@@ -276,6 +304,7 @@ local function onKeyEvent(event)
 	if (gameOverGroup.isVisible == false) then
 		if (event.phase == "down") then
 			if (event.keyName == "down" or event.keyName == "left" or event.keyName == "right") then
+				delay = 1
 				action[event.keyName] = true
 			elseif (event.keyName == "escape") then
 				if (isFalling == true) then
@@ -304,7 +333,7 @@ local function onKeyEvent(event)
 				if (isFalling == true) then
 					paintNowPiece(false)
 					paintGhost(false)
-					while (move(0, 1) == true) do end
+					pos.y, remain = ghostY, 15
 					paintGhost(true)
 					paintNowPiece(true)
 				end
@@ -353,7 +382,7 @@ local function handleKeyboard()
 			paintGhost(true)
 			paintNowPiece(true)
 		end
-		delay = 3
+		delay = 5 - math.floor(level / 3)
 	end
 end
 
@@ -370,7 +399,6 @@ local function onFrameEvent()
 		if (move(0, 1) == false) then
 			paintGhost(false)
 			setPiece()
---			paintNowPiece(true)
 			isFalling = false
 			changePiece = false
 			scanBoard()
@@ -378,6 +406,7 @@ local function onFrameEvent()
 				isComplete = false
 				level = 31
 			else
+				calculate()
 				rearrangeBoard()
 				paintBoard()
 				getRandomPiece()
@@ -393,7 +422,7 @@ local function onFrameEvent()
 		end
 
 		paintNowPiece(true)
-		remain = 31 - level
+		remain = pos.y == ghostY and 15 or 31 - level
 		isFalling = true
 	end
 end
@@ -402,7 +431,7 @@ local function initVariables()
 	action = {}
 	delay = 1
 	board = {[-2] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}}
-	isEmpty = {}
+	count = {}
 	ghostY = 20
 	pos = {x = 5, y = 20}
 	piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 }
@@ -417,6 +446,8 @@ local function initVariables()
 	line = 0
 	level = 1
 	score = 0
+	combo = 0
+	b2b = 0
 	pauseAt = -1
 	isComplete = true
 end
@@ -634,6 +665,18 @@ function scene:create( event )
 		align = "center"
 	})
 	storedPieceText:setFillColor(0, 0, 0)
+
+	clearInfoText = display.newText({
+		parent = uiGroup,
+		text = "Lorem Ipsum",
+		x = x1,
+		y = 7 * HEIGHT / 8,
+		font = native.systemFont,
+		fontSize = 50,
+		align = "center"
+	})
+	clearInfoText:setFillColor(0, 0, 0)
+	clearInfoText.alpha = 0
 
 	pauseGroup = display.newGroup()
 	sceneGroup:insert(pauseGroup)
