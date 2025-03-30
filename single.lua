@@ -296,7 +296,7 @@ end
 local function rotate(clockwise)
 	local temp = {[0] = piece[0]}
 	for i = 1, 4 do
-		if (clockwise == true) then
+		if (clockwise > 0) then
 			temp[2 * i - 1], temp[2 * i] = -piece[2 * i], piece[2 * i - 1]
 		else
 			temp[2 * i - 1], temp[2 * i] = piece[2 * i], -piece[2 * i - 1]
@@ -439,7 +439,7 @@ local function handleKeyboard()
 			paintGhost(true)
 			paintNowPiece(true)
 		end
-		delay = 5 - math.floor(level / 3)
+		delay = 5 - math.floor((level - 1) / 6)
 	end
 end
 
