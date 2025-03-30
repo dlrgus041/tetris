@@ -25,7 +25,8 @@ local p =
 		boardGroup,
 		nextPieceGroup,
 		storedPieceGroup,
-		pos = {x = 0, y = 20},
+		ghostY = 20,
+		pos = {x = 5, y = 20},
 		piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 },
 		board = {[-1] = {8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8}},
 		nowPieceId = 8,
@@ -42,7 +43,8 @@ local p =
 		boardGroup,
 		nextPieceGroup,
 		storedPieceGroup,
-		pos = {x = 0, y = 20},
+		ghostY = 20,
+		pos = {x = 5, y = 20},
 		piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 },
 		board = {[-1] = {8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8}},
 		nowPieceId = 8,
@@ -57,26 +59,49 @@ local p =
 	}
 }
 
-local function paintBoard(player)
-	for col = 1, 20 do
-		for row = 1, 10 do
-			local rgb = const.color[p[player].board[col][row]]
-			p[player].boardGroup:setFillColor(rgb[1], rgb[2], rgb[3])
+local function checkGhost(player)
+	for i = 1, 4 do
+		local x0 = p[player].pos.x + p[player].piece[2 * i - 1]
+		local y0 = p[player].ghostY + p[player].piece[2 * i]
+		if (y0 > 20 or p[player].board[y0][x0] < 8) then return false end
+	end
+	return true
+end
+
+local function paintGhost(player, flag)
+	if (flag == true) then
+		p[player].ghostY = p[player].pos.y + 1
+		while (checkGhost(player) == true) do p[player].ghostY = p[player].ghostY + 1 end
+		p[player].ghostY = p[player].ghostY - 1
+	end
+	local rgb = const.color[clear and p[player].nowPieceId or 8]
+	for i = 1, 4 do
+		if (p[player].pos.y + p[player].piece[2 * i] > 0) then
+			p[player].boardGroup[p[player].pos.y + p[player].piece[2 * i]][p[player].pos.x + p[player].piece[2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3], flag and 0.2 or 1)
+		end
+	end
+end
+
+local function paintNowPiece(player, clear)
+	local rgb = const.color[clear and p[player].nowPieceId or 8]
+	for i = 1, 4 do
+		if (p[player].pos.y + p[player].piece[2 * i] > 0) then
+			p[player].boardGroup[p[player].pos.y + p[player].piece[2 * i]][p[player].pos.x + p[player].piece[2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3], 1)
 		end
 	end
 end
 
 local function paintNextPiece(player, clear)
-	local rgb = const.color[clear and 8 or p[player].nextPieceId]
+	local rgb = const.color[clear and p[player].nextPieceId or 8]
 	for i = 1, 4 do
-		p[player].nextPieceGroup[3 + p[player].pieces[p[player].nextPieceId][2 * i]][3 + p[player].pieces[p[player].nextPieceId][2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3])
+		p[player].nextPieceGroup[3 + p[player].pieces[p[player].nextPieceId][2 * i]][1 + p[player].pieces[p[player].nextPieceId][2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3])
 	end
 end
 
 local function paintStoredPiece(player, clear)
-	local rgb = const.color[clear and 8 or p[player].storedPieceId]
+	local rgb = const.color[clear and p[player].storedPieceId or 8]
 	for i = 1, 4 do
-		p[player].storedPieceGroup[3 + p[player].pieces[p[player].storedPieceId][2 * i]][3 + p[player].pieces[p[player].storedPieceId][2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3])
+		p[player].storedPieceGroup[3 + p[player].pieces[p[player].storedPieceId][2 * i]][1 + p[player].pieces[p[player].storedPieceId][2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3])
 	end
 end
 
@@ -166,15 +191,6 @@ local function rotate(player, clockwise)
 	return false
 end
 
-local function createPiece(player)
-	if (move(player, 0, 1)) then
-
-	else
-
-	end
-end
-
-
 -- -----------------------------------------------------------------------------------
 -- Scene event functions
 -- -----------------------------------------------------------------------------------
@@ -192,8 +208,8 @@ function scene:create( event )
 	background:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 
 	local p1BoardArea = display.newRect(mainGroup, WIDTH / 2 - 12 * half, HEIGHT / 2, HEIGHT / 2, HEIGHT)
-	local p1NextPieceArea = display.newRoundedRect(mainGroup, WIDTH / 4 - 11 * half, HEIGHT / 4, 12 * half, 12 * half, 12)
-	local p1StoredPieceArea = display.newRoundedRect(mainGroup, WIDTH / 4 - 11 * half, 3 * HEIGHT / 4, 12 * half, 12 * half, 12)
+	local p1NextPieceArea = display.newRoundedRect(mainGroup, WIDTH / 4 - 11 * half, HEIGHT / 4, 10 * half, 10 * half, 10)
+	local p1StoredPieceArea = display.newRoundedRect(mainGroup, WIDTH / 4 - 11 * half, 3 * HEIGHT / 4, 10 * half, 10 * half, 10)
 
 	local p1String = display.newText({
 		parent = mainGroup,
@@ -229,8 +245,8 @@ function scene:create( event )
 	p1StoredPieceString:setFillColor(0, 0, 0)
 
 	local p2BoardArea = display.newRect(mainGroup, WIDTH / 2 + 12 * half, HEIGHT / 2, HEIGHT / 2, HEIGHT)
-	local p2NextPieceArea = display.newRoundedRect(mainGroup, 3 * WIDTH / 4 + 11 * half, HEIGHT / 4, 12 * half, 12 * half, 12)
-	local p2StoredPieceArea = display.newRoundedRect(mainGroup, 3 * WIDTH / 4 + 11 * half, 3 * HEIGHT / 4, 12 * half, 12 * half, 12)
+	local p2NextPieceArea = display.newRoundedRect(mainGroup, 3 * WIDTH / 4 + 11 * half, HEIGHT / 4, 10 * half, 10 * half, 10)
+	local p2StoredPieceArea = display.newRoundedRect(mainGroup, 3 * WIDTH / 4 + 11 * half, 3 * HEIGHT / 4, 10 * half, 10 * half, 10)
 	
 	local p2String = display.newText({
 		parent = mainGroup,
@@ -267,10 +283,10 @@ function scene:create( event )
 
 	local p1BoardX = WIDTH / 2 - 22 * half
 	local p2BoardX = WIDTH / 2 + 2 * half
-	local p1PieceX = WIDTH / 4 - 16 * half
-	local p2PieceX = 3 * WIDTH / 4 + 6 * half
-	local nextY = HEIGHT / 4 - 5 * half
-	local storedY = 3 * HEIGHT / 4 - 5 * half
+	local p1PieceX = WIDTH / 4 - 15 * half
+	local p2PieceX = 3 * WIDTH / 4 + 7 * half
+	local nextY = HEIGHT / 4 - 4 * half
+	local storedY = 3 * HEIGHT / 4 - 4 * half
 
 	p[1].boardGroup = display.newGroup()
 	sceneGroup:insert(p[1].boardGroup)
@@ -288,9 +304,9 @@ function scene:create( event )
 	p[1].nextPieceGroup = display.newGroup()
 	sceneGroup:insert(p[1].nextPieceGroup)
 
-	for col = 1, 5 do
+	for col = 1, 4 do
 		local line = display.newGroup()
-		for row = 1, 5 do
+		for row = 1, 4 do
 			local grid = display.newRect(line, p1PieceX + (2 * row - 1) * half, nextY + (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
 			grid.strokeWidth = half / 25
@@ -301,9 +317,9 @@ function scene:create( event )
 	p[1].storedPieceGroup = display.newGroup()
 	sceneGroup:insert(p[1].storedPieceGroup)
 
-	for col = 1, 5 do
+	for col = 1, 4 do
 		local line = display.newGroup()
-		for row = 1, 5 do
+		for row = 1, 4 do
 			local grid = display.newRect(line, p1PieceX + (2 * row - 1) * half, storedY + (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
 			grid.strokeWidth = half / 25
@@ -327,9 +343,9 @@ function scene:create( event )
 	p[2].nextPieceGroup = display.newGroup()
 	sceneGroup:insert(p[2].nextPieceGroup)
 
-	for col = 1, 5 do
+	for col = 1, 4 do
 		local line = display.newGroup()
-		for row = 1, 5 do
+		for row = 1, 4 do
 			local grid = display.newRect(line, p2PieceX + (2 * row - 1) * half, nextY + (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
 			grid.strokeWidth = half / 25
@@ -340,9 +356,9 @@ function scene:create( event )
 	p[2].storedPieceGroup = display.newGroup()
 	sceneGroup:insert(p[2].storedPieceGroup)
 
-	for col = 1, 5 do
+	for col = 1, 4 do
 		local line = display.newGroup()
-		for row = 1, 5 do
+		for row = 1, 4 do
 			local grid = display.newRect(line, p2PieceX + (2 * row - 1) * half, storedY + (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
 			grid.strokeWidth = half / 25

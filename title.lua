@@ -97,7 +97,7 @@ function scene:create( event )
 		fontSize = 50,
 		align = "center"
 	})
-	local localCoopString:setFillColor(0, 0, 0)
+	localCoopString:setFillColor(0, 0, 0)
 
 	singlePlayButton:addEventListener("mouse", singlePlay)
 	localPVPButton:addEventListener("mouse", localPVP)

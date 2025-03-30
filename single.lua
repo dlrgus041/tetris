@@ -24,9 +24,13 @@ local gameOverGroup
 local levelVarText
 local linesVarText
 local scoreVarText
+local tspinInfoText
 local clearInfoText
+local comboText
 
 local gameOverTitle
+local finalLevelText
+local finalLinesText
 local finalScoreText
 
 local replayButton
@@ -84,6 +88,7 @@ local score
 
 local combo
 local b2b
+local spin
 
 local pauseAt
 local isComplete
@@ -131,6 +136,36 @@ local function isGameOver()
 	return false
 end
 
+local function checkTspin()
+	if (nowPieceId == 3 and spin == true) then
+		
+		local corner = {[0] = 0, -1,-1, 1,-1, 1,1, -1,1 }
+		for j = 1, piece[0] do
+			for i = 1, 4 do
+				corner[2 * i - 1], corner[2 * i] = -corner[2 * i], corner[2 * i - 1]
+			end
+		end
+
+		local upper, all = 2, 4
+		for i = 1, 4 do
+			local x0 = pos.x + corner[2 * i - 1]
+			local y0 = pos.y + corner[2 * i]
+			if (y0 > 20 or x0 < 1 or x0 > 10 or board[y0][x0] < 8) then
+				if (i <= 2) then upper = upper - 1 end
+				all = all - 1
+			end
+		end
+
+		if (all <= 1) then
+			if (upper == 0) then
+				return 2	-- Proper T-spin
+			else
+				return 1	-- mini T-spin
+			end
+		else return 0 end
+	else return 0 end
+end
+
 local function calculate()
 	
 	local erase, perfect = 0, true
@@ -143,24 +178,38 @@ local function calculate()
 	end
 
 	if (erase > 0) then
-
 		line = line + erase
 		linesVarText.text = line
+
+		local tspin = checkTspin()
+
+		score = score + 100 * erase + 200 * combo + 400 * b2b
+		if (perfect == true) then score = score + 1000 end
+		scoreVarText.text = score
+
+		if (tspin > 0) then
+			tspinInfoText.text = (tspin < 2 and "mini " or "") .. "T-spin"
+			tspinInfoText.alpha = 1
+			transition.fadeOut(tspinInfoText, {time = 1000})
+		end
+
+		if (combo > 0) then
+			comboText.text = combo .. "combo"
+			comboText.alpha = 1
+			transition.fadeOut(comboText, {time = 1000})
+		end
 
 		clearInfoText.text = erase == 4 and "TETRIS" or erase == 3 and "TRIPLE" or erase == 2 and "DOUBLE" or "SINGLE"
 		clearInfoText.alpha = 1
 		transition.fadeOut(clearInfoText, {time = 1000})
 
-		score = score + 100 * erase + 200 * combo + 400 * b2b + (perfect and 1000 or 0)
-		scoreVarText.text = score
-
 		combo = combo + 1
-		b2b = erase < 4 and 0 or b2b + 1
+		b2b = (erase == 4 or tspin > 0) and b2b + 1 or 0
+		print("T-spin: " .. tspin)
 	else
-		combo, b2b = 0, 0
+		combo = 0
+		b2b = 0
 	end
-
-	linesVarText.text = line
 end
 
 local function scanBoard()
@@ -248,9 +297,9 @@ local function rotate(clockwise)
 	local temp = {[0] = piece[0]}
 	for i = 1, 4 do
 		if (clockwise == true) then
-			temp[2 * i - 1], temp[2 * i] = piece[2 * i], -piece[2 * i - 1]
-		else
 			temp[2 * i - 1], temp[2 * i] = -piece[2 * i], piece[2 * i - 1]
+		else
+			temp[2 * i - 1], temp[2 * i] = piece[2 * i], -piece[2 * i - 1]
 		end
 	end
 
@@ -304,8 +353,10 @@ local function onKeyEvent(event)
 	if (gameOverGroup.isVisible == false) then
 		if (event.phase == "down") then
 			if (event.keyName == "down" or event.keyName == "left" or event.keyName == "right") then
-				delay = 1
-				action[event.keyName] = true
+				if (isFalling == true and pauseGroup.isVisible == false) then
+					delay = 1
+					action[event.keyName] = true
+				end
 			elseif (event.keyName == "escape") then
 				if (isFalling == true) then
 					if (remain > 0) then
@@ -317,7 +368,7 @@ local function onKeyEvent(event)
 					end
 				end
 			elseif (event.keyName == "leftShift" or event.keyName == "c") then
-				if (isFalling == true and changePiece == false) then
+				if (isFalling == true and changePiece == false and pauseGroup.isVisible == false) then
 					paintNowPiece(false)
 					paintGhost(false)
 					paintStoredPiece(false)
@@ -330,28 +381,34 @@ local function onKeyEvent(event)
 					paintNowPiece(true)
 				end
 			elseif (event.keyName == "space") then
-				if (isFalling == true) then
+				if (isFalling == true and pauseGroup.isVisible == false) then
 					paintNowPiece(false)
 					paintGhost(false)
 					pos.y, remain = ghostY, 15
 					paintGhost(true)
 					paintNowPiece(true)
 				end
-			elseif (event.keyName == "up") then
-				paintNowPiece(false)
-				paintGhost(false)
-				rotate(1)
-				paintGhost(true)
-				paintNowPiece(true)
+			elseif (event.keyName == "up" or event.keyName == "x") then
+				if (isFalling == true and pauseGroup.isVisible == false) then
+					paintNowPiece(false)
+					paintGhost(false)
+					spin = rotate(1)
+					paintGhost(true)
+					paintNowPiece(true)
+				end
 			elseif (event.keyName == "leftCtrl" or event.keyName == "z") then
-				paintNowPiece(false)
-				paintGhost(false)
-				rotate(-1)
-				paintGhost(true)
-				paintNowPiece(true)
+				if (isFalling == true and pauseGroup.isVisible == false) then
+					paintNowPiece(false)
+					paintGhost(false)
+					spin = rotate(-1)
+					paintGhost(true)
+					paintNowPiece(true)
+				end
 			end
 		elseif (event.keyName == "down" or event.keyName == "left" or event.keyName == "right") then
-			action[event.keyName] = false
+			if (isFalling == true and pauseGroup.isVisible == false) then
+				action[event.keyName] = false
+			end
 		end
 	end
 end
@@ -390,8 +447,10 @@ local function onFrameEvent()
 
 	remain = remain - 1
 
-	if (level == 31) then
-		gameOverTitle.text = isComplete and "Game Clear" or "Game Over"
+	if (isComplete == true) then
+		gameOverTitle.text = level > 30 and "Game Clear" or "Game Over"
+		finalLevelText.text = level
+		finalLinesText.text = line
 		finalScoreText.text = score
 		gameOverGroup.isVisible = true
 	elseif (remain == 0) then
@@ -403,8 +462,8 @@ local function onFrameEvent()
 			changePiece = false
 			scanBoard()
 			if (isGameOver() == true) then
-				isComplete = false
-				level = 31
+				isComplete = true
+				remain = -1
 			else
 				calculate()
 				rearrangeBoard()
@@ -421,9 +480,12 @@ local function onFrameEvent()
 			levelVarText.text = level
 		end
 
+		if (level > 30) then isComplete = true end
+
 		paintNowPiece(true)
 		remain = pos.y == ghostY and 15 or 31 - level
 		isFalling = true
+		spin = false
 	end
 end
 
@@ -448,8 +510,9 @@ local function initVariables()
 	score = 0
 	combo = 0
 	b2b = 0
+	spin = false
 	pauseAt = -1
-	isComplete = true
+	isComplete = false
 end
 
 local function initPiece()
@@ -465,6 +528,8 @@ end
 local function replay(event)
 	if (event.isPrimaryButtonDown) then
 		gameOverGroup.isVisible = false
+		paintNextPiece(false)
+		paintStoredPiece(false)
 		initVariables()
 		initPiece()
 	end
@@ -666,6 +731,18 @@ function scene:create( event )
 	})
 	storedPieceText:setFillColor(0, 0, 0)
 
+	tspinInfoText = display.newText({
+		parent = uiGroup,
+		text = "Lorem Ipsum",
+		x = x1,
+		y = 13 * HEIGHT / 16,
+		font = native.systemFont,
+		fontSize = 20,
+		align = "center"
+	})
+	tspinInfoText:setFillColor(0, 0, 0)
+	tspinInfoText.alpha = 0
+
 	clearInfoText = display.newText({
 		parent = uiGroup,
 		text = "Lorem Ipsum",
@@ -677,6 +754,18 @@ function scene:create( event )
 	})
 	clearInfoText:setFillColor(0, 0, 0)
 	clearInfoText.alpha = 0
+
+	comboText = display.newText({
+		parent = uiGroup,
+		text = "Lorem Ipsum",
+		x = x1,
+		y = 15 * HEIGHT / 16,
+		font = native.systemFont,
+		fontSize = 20,
+		align = "center"
+	})
+	comboText:setFillColor(0, 0, 0)
+	comboText.alpha = 0
 
 	pauseGroup = display.newGroup()
 	sceneGroup:insert(pauseGroup)
@@ -699,38 +788,98 @@ function scene:create( event )
 	gameOverAlert:setFillColor(1, 1, 1, 0.8)
 	gameOverAlert.alpha = 0.8
 
-	local finalScoreArea = display.newRoundedRect(gameOverGroup, 11 * WIDTH / 32, HEIGHT / 2, 12 * half, 4 * half, 10)
+	local finalLevelArea = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2 - 5 * half, 16 * half, 4 * half, 10)
+	finalLevelArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalLevelArea.alpha = 0.8
+
+	local finalLevelVarArea = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2 - 5 * half, 16 * half, 4 * half, 10)
+	finalLevelVarArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalLevelVarArea.alpha = 0.8
+
+	local finalLinesArea = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2, 16 * half, 4 * half, 10)
+	finalLinesArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalLinesArea.alpha = 0.8
+
+	local finalLinesVarArea = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2, 16 * half, 4 * half, 10)
+	finalLinesVarArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalLinesVarArea.alpha = 0.8
+
+	local finalScoreArea = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2 + 5 * half, 16 * half, 4 * half, 10)
 	finalScoreArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 	finalScoreArea.alpha = 0.8
 
-	local finalScoreVarArea = display.newRoundedRect(gameOverGroup, 19 * WIDTH / 32, HEIGHT / 2, 16 * half, 4 * half, 10)
+	local finalScoreVarArea = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2 + 5 * half, 16 * half, 4 * half, 10)
 	finalScoreVarArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 	finalScoreVarArea.alpha = 0.8
 
-	replayButton = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2 + WIDTH / 8, 16 * half, 6 * half, 10)
+	replayButton = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2 + 3 * WIDTH / 16, 16 * half, 6 * half, 10)
 	replayButton:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 	replayButton.alpha = 0.8
 
-	backMainButton = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2 + WIDTH / 8, 16 * half, 6 * half, 10)
+	backMainButton = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2 + 3 * WIDTH / 16, 16 * half, 6 * half, 10)
 	backMainButton:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
 	backMainButton.alpha = 0.8
 
 	gameOverTitle = display.newText({
 		parent = gameOverGroup,
 		text = "Lorem Ipsum",
-		x = WIDTH / 2,
-		y = HEIGHT / 2 - WIDTH / 8,
+		x = WIDTH / 2 ,
+		y = HEIGHT / 2 - 3 * WIDTH / 16,
 		font = native.systemFont,
-		fontSize = 50,
+		fontSize = 75,
 		align = "center"
 	})
 	gameOverTitle:setFillColor(0, 0, 0)
 
+	local finalLevelString = display.newText({
+		parent = gameOverGroup,
+		text = "LEVEL",
+		x = 3 * WIDTH / 8,
+		y = HEIGHT / 2 - 5 * half,
+		font = native.systemFont,
+		fontSize = 50,
+		align = "center"
+	})
+	finalLevelString:setFillColor(0, 0, 0)
+
+	finalLevelText = display.newText({
+		parent = gameOverGroup,
+		text = "Lorem Ipsum",
+		x = 5 * WIDTH / 8,
+		y = HEIGHT / 2 - 5 * half,
+		font = native.systemFont,
+		fontSize = 50,
+		align = "right"
+	})
+	finalLevelText:setFillColor(0, 0, 0)
+
+	local finalLinesString = display.newText({
+		parent = gameOverGroup,
+		text = "LINES",
+		x = 3 * WIDTH / 8,
+		y = HEIGHT / 2,
+		font = native.systemFont,
+		fontSize = 50,
+		align = "center"
+	})
+	finalLinesString:setFillColor(0, 0, 0)
+
+	finalLinesText = display.newText({
+		parent = gameOverGroup,
+		text = "Lorem Ipsum",
+		x = 5 * WIDTH / 8,
+		y = HEIGHT / 2,
+		font = native.systemFont,
+		fontSize = 50,
+		align = "right"
+	})
+	finalLinesText:setFillColor(0, 0, 0)
+
 	local finalScoreString = display.newText({
 		parent = gameOverGroup,
 		text = "SCORE",
-		x = 11 * WIDTH / 32,
-		y = HEIGHT / 2,
+		x = 3 * WIDTH / 8,
+		y = HEIGHT / 2 + 5 * half,
 		font = native.systemFont,
 		fontSize = 50,
 		align = "center"
@@ -740,8 +889,8 @@ function scene:create( event )
 	finalScoreText = display.newText({
 		parent = gameOverGroup,
 		text = "Lorem Ipsum",
-		x = 19 * WIDTH / 32,
-		y = HEIGHT / 2,
+		x = 5 * WIDTH / 8,
+		y = HEIGHT / 2 + 5 * half,
 		font = native.systemFont,
 		fontSize = 50,
 		align = "right"
@@ -752,7 +901,7 @@ function scene:create( event )
 		parent = gameOverGroup,
 		text = "REPLAY",
 		x = 3 * WIDTH / 8,
-		y = HEIGHT / 2 + WIDTH / 8,
+		y = HEIGHT / 2 + 3 * WIDTH / 16,
 		font = native.systemFont,
 		fontSize = 50,
 		align = "center"
@@ -763,7 +912,7 @@ function scene:create( event )
 		parent = gameOverGroup,
 		text = "MAIN",
 		x = 5 * WIDTH / 8,
-		y = HEIGHT / 2 + WIDTH / 8,
+		y = HEIGHT / 2 + 3 * WIDTH / 16,
 		font = native.systemFont,
 		fontSize = 50,
 		align = "center"
