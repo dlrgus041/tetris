@@ -39,6 +39,12 @@ local backMainButton
 local board
 local count
 
+local info
+local record
+local maxCombo
+local countB2B
+local countPerfect
+
 local color =
 {
 	{0, 1, 1},
@@ -183,10 +189,6 @@ local function calculate()
 
 		local tspin = checkTspin()
 
-		score = score + 100 * erase + 200 * combo + 400 * b2b
-		if (perfect == true) then score = score + 1000 end
-		scoreVarText.text = score
-
 		if (tspin > 0) then
 			tspinInfoText.text = (tspin < 2 and "mini " or "") .. "T-spin"
 			tspinInfoText.alpha = 1
@@ -203,12 +205,41 @@ local function calculate()
 		clearInfoText.alpha = 1
 		transition.fadeOut(clearInfoText, {time = 1000})
 
+		info[tspin][erase] = info[tspin][erase] + 1
+		score = score + record[tspin][erase]
+
+		if (perfect == true) then
+			score = score + 4
+			countPerfect = countPerfect + 1
+		end
+
+		if (b2b == true and (erase == 4 or tspin > 0)) then
+			if (tspin == 2) then score = score + 1 end
+			countB2B = countB2B + 1
+		end
+		
+		if (combo >= 10) then
+			score = score + 5
+		elseif (combo >= 7) then
+			score = score + 4
+		elseif (combo >= 5) then
+			score = score + 3
+		elseif (combo >= 3) then
+			score = score + 2
+		elseif (combo >= 1) then
+			score = score + 1
+		end
+
+		scoreVarText.text = score
+
 		combo = combo + 1
-		b2b = (erase == 4 or tspin > 0) and b2b + 1 or 0
-		print("T-spin: " .. tspin)
+		b2b = (erase == 4 or tspin > 0)
+
+		maxCombo = math.max(maxCombo, combo)
+
 	else
 		combo = 0
-		b2b = 0
+		b2b = false
 	end
 end
 
@@ -306,15 +337,15 @@ local function rotate(clockwise)
 	local test = {}
 	if (nowPieceId == 1) then
 		if (clockwise > 0) then
-			if (temp[0] == 0) then test = { 0,0, -2,0, 1,0, -2,1, 1,-2 }
-			elseif (temp[0] == 1) then test = { 0,0, -1,0, 2,0, -1,-2, 2,1 }
-			elseif (temp[0] == 2) then test = { 0,0, 2,0, -1,0, 2,-1, -1,2 }
-			else test = { 0,0, 1,0, -2,0, 1,2, -2,-1 } end
+			if (temp[0] == 0) then test = { 1,0, -1,0, 2,0, -1,1, 2,-2 }
+			elseif (temp[0] == 1) then test = { 0,1, -1,1, 2,1, -1,-1, 2,2 }
+			elseif (temp[0] == 2) then test = { -1,0, 1,0, -2,0, 1,-1, -2,2 }
+			else test = { 0,-1, 1,-1, -2,-1, 1,1, -2,-2 } end
 		else
-			if (temp[0] == 0) then test = { 0,0, -1,0, 2,0, -1,-2, 2,1 }
-			elseif (temp[0] == 1) then test = { 0,0, 2,0, -1,0, 2,-1, -1,2 }
-			elseif (temp[0] == 2) then test = { 0,0, 1,0, -2,0, 1,2, -2,-1 }
-			else test = { 0,0, -2,0, 1,0, -2,1, 1,-2 } end
+			if (temp[0] == 0) then test = { 0,1, -1,1, 2,1, -1,-1, 2,2 }
+			elseif (temp[0] == 1) then test = { -1,0, 1,0, -2,0, 1,-1, -2,2 }
+			elseif (temp[0] == 2) then test = { 0,-1, 1,-1, -2,-2, 1,1, -2,-2 }
+			else test = { 1,0, -1,0, 2,0, -1,1, 2,-2 } end
 		end
 	elseif (nowPieceId == 2) then
 		if (clockwise > 0) then
@@ -384,7 +415,7 @@ local function onKeyEvent(event)
 				if (isFalling == true and pauseGroup.isVisible == false) then
 					paintNowPiece(false)
 					paintGhost(false)
-					pos.y, remain = ghostY, 15
+					pos.y, remain, spin = ghostY, 15, false
 					paintGhost(true)
 					paintNowPiece(true)
 				end
@@ -422,6 +453,7 @@ local function handleKeyboard()
 			paintNowPiece(false)
 			paintGhost(false)
 			move(0, 1)
+			spin = false
 			paintGhost(true)
 			paintNowPiece(true)
 		end
@@ -429,6 +461,7 @@ local function handleKeyboard()
 			paintNowPiece(false)
 			paintGhost(false)
 			move(-1, 0)
+			spin = false
 			paintGhost(true)
 			paintNowPiece(true)
 		end
@@ -436,6 +469,7 @@ local function handleKeyboard()
 			paintNowPiece(false)
 			paintGhost(false)
 			move(1, 0)
+			spin = false
 			paintGhost(true)
 			paintNowPiece(true)
 		end
@@ -445,7 +479,7 @@ end
 
 local function onFrameEvent()
 
-	remain = remain - 1
+	if (remain > 0) then remain = remain - 1 end
 
 	if (isComplete == true) then
 		gameOverTitle.text = level > 30 and "Game Clear" or "Game Over"
@@ -509,17 +543,25 @@ local function initVariables()
 	level = 1
 	score = 0
 	combo = 0
-	b2b = 0
+	b2b = false
 	spin = false
 	pauseAt = -1
 	isComplete = false
+	info = {}
+	record = {[0] = {0, 1, 2, 4}, {0, 1}, {2, 4, 6}}
+	maxCombo = 0
+	countB2B = 0
+	countPerfect = 0
 end
 
 local function initPiece()
 	for col = 1, 20 do
-		local arr = {}
-		for row = 1, 10 do arr[row] = 8 end
-		board[col] = arr
+		board[col] = {}
+		for row = 1, 10 do board[col][row] = 8 end
+	end
+	for i = 0, 2 do
+		info[i] = {}
+		for j = 1, 4 do info[i][j] = 0 end
 	end
 	getRandomPiece()
 	paintStoredPiece(true)
@@ -961,6 +1003,7 @@ function scene:hide( event )
 
 		Runtime:removeEventListener("key", onKeyEvent)
 		Runtime:removeEventListener("enterFrame", onFrameEvent)
+		Runtime:removeEventListener("enterFrame", handleKeyboard)
 		composer.removeScene("single")
 	end
 end

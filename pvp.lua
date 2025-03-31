@@ -19,6 +19,17 @@ local mainGroup
 local pauseGroup
 local gameOverGroup
 
+local gameOverTitle
+local finalP1LevelText
+local finalP2LevelText
+local finalP1LinesText
+local finalP2LinesText
+local finalP1ScoreText
+local finalP2ScoreText
+
+local replayButton
+local backMainButton
+
 local keyboard = {}
 local queue = {}
 local winner = 0
@@ -40,23 +51,10 @@ local p =
 		boardGroup,
 		nextPieceGroup,
 		storedPieceGroup,
-		ghostY = 20,
-		pos = {x = 5, y = 20},
-		piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 },
-		board = {[-2] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}},
-		count = {},
-		box = {},
-		bag = {},
-		nowPieceId = 8,
-		nextPieceId = 8,
-		storedPieceId = 1,
-		changePiece = false,
-		score = 0,
-		lines = 0,
-		level = 1,
-		pauseAt = -1,
-		interval = 1,
-		delay = 1,
+		warningGroup,
+		tspinInfoText,
+		clearInfoText,
+		comboInfoText,
 		cw0 = "i",
 		right = "l",
 		left = "j",
@@ -70,23 +68,10 @@ local p =
 		boardGroup,
 		nextPieceGroup,
 		storedPieceGroup,
-		ghostY = 20,
-		pos = {x = 5, y = 20},
-		piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 },
-		board = {[-2] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}},
-		count = {},
-		box = {},
-		bag = {},
-		nowPieceId = 8,
-		nextPieceId = 8,
-		storedPieceId = 1,
-		changePiece = false,
-		score = 0,
-		lines = 0,
-		level = 1,
-		pauseAt = -1,
-		interval = 1,
-		delay = -1,
+		warningGroup,
+		tspinInfoText,
+		clearInfoText,
+		comboInfoText,
 		cw0 = "numPad8",
 		right = "numPad6",
 		left = "numPad4",
@@ -97,6 +82,127 @@ local p =
 		hold = "up",
 	}
 }
+
+local function paintWarning(player, flag)
+	local rgb = flag == true and {0.5, 0.5, 0.5} or {203 / 255, 125 / 255, 96 / 255}
+	for i = 1, p[player].garbage do
+		p[player].warningGroup[21 - i]:setFillColor(rgb[1], rgb[2], rgb[3])
+	end
+end
+
+local function updateWarning(player, damage)
+	paintWarning(player, false)
+	paintWarning(3 - player, false)
+	p[player].garbage = p[player].garbage - damage
+	if (p[player].garbage < 0) then
+		p[3 - player].garbage = p[3 - player].garbage - p[player].garbage
+		p[player].garbage = 0
+	end
+	paintWarning(player, true)
+	paintWarning(3 - player, true)
+end
+
+
+local function checkTspin(player)
+	if (p[player].nowPieceId == 3 and p[player].spin == true) then
+		
+		local corner = {[0] = 0, -1,-1, 1,-1, 1,1, -1,1 }
+		for j = 1, p[player].piece[0] do
+			for i = 1, 4 do
+				corner[2 * i - 1], corner[2 * i] = -corner[2 * i], corner[2 * i - 1]
+			end
+		end
+
+		local upper, all = 2, 4
+		for i = 1, 4 do
+			local x0 = p[player].pos.x + corner[2 * i - 1]
+			local y0 = p[player].pos.y + corner[2 * i]
+			if (y0 > 20 or x0 < 1 or x0 > 10 or p[player].board[y0][x0] < 8) then
+				if (i <= 2) then upper = upper - 1 end
+				all = all - 1
+			end
+		end
+
+		if (all <= 1) then
+			if (upper == 0) then
+				return 2	-- Proper T-spin
+			else
+				return 1	-- mini T-spin
+			end
+		else return 0 end
+	else return 0 end
+end
+
+local function calculate(player)
+	
+	local erase = 0
+	local perfect = true
+
+	for col = 1, 20 do
+		if (p[player].count[col] == 10) then
+			erase = erase + 1
+		elseif (perfect == true) then
+			perfect = false
+		end
+	end
+
+	if (erase > 0) then
+		p[player].lines = p[player].lines + erase
+
+		local tspin = checkTspin(player)
+
+		if (tspin > 0) then
+			p[player].tspinInfoText.text = (tspin < 2 and "mini " or "") .. "T-spin"
+			p[player].tspinInfoText.alpha = 1
+			transition.fadeOut(p[player].tspinInfoText, {time = 1000})
+		end
+
+		if (p[player].combo > 0) then
+			p[player].comboInfoText.text = p[player].combo .. "combo"
+			p[player].comboInfoText.alpha = 1
+			transition.fadeOut(p[player].comboText, {time = 1000})
+		end
+
+		p[player].clearInfoText.text = erase == 4 and "TETRIS" or erase == 3 and "TRIPLE" or erase == 2 and "DOUBLE" or "SINGLE"
+		p[player].clearInfoText.alpha = 1
+		transition.fadeOut(p[player].clearInfoText, {time = 1000})
+
+		local damage = const.info[tspin][erase]
+
+		if (perfect == true) then
+			damage = damage + 4
+			p[player].countPerfect = p[player].countPerfect + 1
+		end
+
+		if (p[player].b2b == true and (erase == 4 or tspin > 0)) then
+			if (tspin == 2) then damage = damage + 1 end
+			p[player].countB2B = p[player].countB2B + 1
+		end
+		
+		if (p[player].combo >= 10) then
+			damage = damage + 5
+		elseif (p[player].combo >= 7) then
+			damage = damage + 4
+		elseif (p[player].combo >= 5) then
+			damage = damage + 3
+		elseif (p[player].combo >= 3) then
+			damage = damage + 2
+		elseif (p[player].combo >= 1) then
+			damage = damage + 1
+		end
+
+		p[player].score = p[player].score + damage
+
+		p[player].combo = p[player].combo + 1
+		p[player].b2b = (erase == 4 or tspin > 0)
+
+		p[player].maxCombo = math.max(p[player].maxCombo, p[player].combo)
+		updateWarning(player, damage)
+	else
+		p[player].combo = 0
+		p[player].b2b = false
+	end	
+end
 
 local function isGameOver(player)
 	for row = 1, 10 do
@@ -162,8 +268,8 @@ local function paintGhost(player, flag)
 	end
 	local rgb = const.color[flag and p[player].nowPieceId or 8]
 	for i = 1, 4 do
-		if (p[player].pos.y + p[player].piece[2 * i] > 0) then
-			p[player].boardGroup[p[player].pos.y + p[player].piece[2 * i]][p[player].pos.x + p[player].piece[2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3], flag and 0.2 or 1)
+		if (p[player].ghostY + p[player].piece[2 * i] > 0) then
+			p[player].boardGroup[p[player].ghostY + p[player].piece[2 * i]][p[player].pos.x + p[player].piece[2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3], flag and 0.2 or 1)
 		end
 	end
 end
@@ -240,15 +346,15 @@ local function rotate(player, clockwise)
 	local test = {}
 	if (p[player].nowPieceId == 1) then
 		if (clockwise > 0) then
-			if (temp[0] == 0) then test = { 0,0, -2,0, 1,0, -2,1, 1,-2 }
-			elseif (temp[0] == 1) then test = { 0,0, -1,0, 2,0, -1,-2, 2,1 }
-			elseif (temp[0] == 2) then test = { 0,0, 2,0, -1,0, 2,-1, -1,2 }
-			else test = { 0,0, 1,0, -2,0, 1,2, -2,-1 } end
+			if (temp[0] == 0) then test = { 1,0, -1,0, 2,0, -1,1, 2,-2 }
+			elseif (temp[0] == 1) then test = { 0,1, -1,1, 2,1, -1,-1, 2,2 }
+			elseif (temp[0] == 2) then test = { -1,0, 1,0, -2,0, 1,-1, -2,2 }
+			else test = { 0,-1, 1,-1, -2,-1, 1,1, -2,-2 } end
 		else
-			if (temp[0] == 0) then test = { 0,0, -1,0, 2,0, -1,-2, 2,1 }
-			elseif (temp[0] == 1) then test = { 0,0, 2,0, -1,0, 2,-1, -1,2 }
-			elseif (temp[0] == 2) then test = { 0,0, 1,0, -2,0, 1,2, -2,-1 }
-			else test = { 0,0, -2,0, 1,0, -2,1, 1,-2 } end
+			if (temp[0] == 0) then test = { 0,1, -1,1, 2,1, -1,-1, 2,2 }
+			elseif (temp[0] == 1) then test = { -1,0, 1,0, -2,0, 1,-1, -2,2 }
+			elseif (temp[0] == 2) then test = { 0,-1, 1,-1, -2,-2, 1,1, -2,-2 }
+			else test = { 1,0, -1,0, 2,0, -1,1, 2,-2 } end
 		end
 	elseif (p[player].nowPieceId == 2) then
 		if (clockwise > 0) then
@@ -281,6 +387,17 @@ local function rotate(player, clockwise)
 		if (move(player, test[2 * i - 1], test[2 * i], temp)) then return true end
 	end
 	return false
+end
+
+local function addGarbageLine(player, n)
+	local temp = {}
+	for i = 1, n do
+		local garbage, empty = {}, math.random(10)
+		for row = 1, 10 do garbage[row] = row == empty and 8 or 0 end
+		temp[21 - i] = garbage
+	end
+	for i = n + 1, 23 do temp[21 - i] = p[player].board[21 + n - i] end
+	p[player].board = temp
 end
 
 local function onCommonKeyEvent(event)
@@ -318,6 +435,7 @@ local function onKeyEvent(event, player)
 				paintNowPiece(player, false)
 				paintGhost(player, false)
 				p[player].pos.y = p[player].ghostY
+				p[player].spin = false
 				p[player].interval = 15
 				paintGhost(player, true)
 				paintNowPiece(player, true)
@@ -352,19 +470,33 @@ local function onKeepPressEvent(player)
 
 	if (p[player].delay == 0) then
 
-		paintNowPiece(player, false)
-		paintGhost(player, false)
-
 		if keyboard[p[player].soft] then
+			paintNowPiece(player, false)
+			paintGhost(player, false)
 			move(player, 0, 1)
+			p[player].spin = false
 			if (p[player].pos.y == p[player].ghostY) then p[player].interval = 15 end
+			paintGhost(player, true)
+			paintNowPiece(player, true)
 		end
 
-		if keyboard[p[player].right] then move(player, 1, 0) end
-		if keyboard[p[player].left] then move(player, -1, 0) end
+		if keyboard[p[player].right] then
+			paintNowPiece(player, false)
+			paintGhost(player, false)
+			move(player, 1, 0)
+			p[player].spin = false
+			paintGhost(player, true)
+			paintNowPiece(player, true)
+		end
 
-		paintGhost(player, true)
-		paintNowPiece(player, true)
+		if keyboard[p[player].left] then
+			paintNowPiece(player, false)
+			paintGhost(player, false)
+			move(player, -1, 0)
+			p[player].spin = false
+			paintGhost(player, true)
+			paintNowPiece(player, true)
+		end
 
 		p[player].delay = 5 - math.floor((p[player].level - 1) / 6)
 	end
@@ -372,10 +504,21 @@ end
 
 local function onFrameEvent(player)
 
-	p[player].interval = p[player].interval - 1
+	if (p[player].interval > 0) then
+		p[player].interval = p[player].interval - 1
+	end
 
-	if (winner > 0) then
-		-- show game over alert
+	if (winner > 0 and gameOverGroup.isVisible == false) then
+		p[1].interval = -1
+		p[2].interval = -1
+		gameOverTitle.text = "Player " .. winner .. " win"
+		finalP1LevelText.text = p[1].level
+		finalP2LevelText.text = p[2].level
+		finalP1LinesText.text = p[1].lines
+		finalP2LinesText.text = p[2].lines
+		finalP1ScoreText.text = p[1].score
+		finalP2ScoreText.text = p[2].score
+		gameOverGroup.isVisible = true
 	elseif (p[player].interval == 0) then
 		paintNowPiece(player, false)
 		if (move(player, 0, 1) == false) then
@@ -385,8 +528,13 @@ local function onFrameEvent(player)
 			scanBoard(player)
 			if (isGameOver(player) == true) then
 				winner = 3 - player
-				p[player].interval = -1
 			else
+				calculate(player)
+				if (p[player].garbage > 0) then
+					addGarbageLine(player, p[player].garbage)
+					paintWarning(player, false)
+					p[player].garbage = 0
+				end
 				rearrangeBoard(player)
 				paintBoard(player)
 				getRandomPiece(player)
@@ -396,9 +544,11 @@ local function onFrameEvent(player)
 		end
 
 		paintNowPiece(player, true)
+		p[player].spin = false
 
-		if (p[player].lines >= 5 * p[player].level) then
+		if (p[player].lines >= 10 * p[player].level) then
 			p[player].level = p[player].level + 1
+			p[player].levelText = p[player].level
 		end
 
 		if (p[player].level > 30) then winner = player end
@@ -410,6 +560,72 @@ local function onFrameEvent(player)
 		end
 	end
 end
+
+local function initVariables()
+	for player = 1, 2 do
+		p[player].ghostY = 20
+		p[player].pos = {x = 5, y = 20}
+		p[player].piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 }
+		p[player].board = {[-2] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}}
+		p[player].count = {}
+		p[player].box = {}
+		p[player].bag = {}
+		p[player].nowPieceId = 8
+		p[player].nextPieceId = 8
+		p[player].storedPieceId = 1
+		p[player].changePiece = false
+		p[player].score = 0
+		p[player].lines = 0
+		p[player].level = 1
+		p[player].combo = 0
+		p[player].b2b = 0
+		p[player].maxCombo = 0
+		p[player].countB2B = 0
+		p[player].countPerfect = 0
+		p[player].spin = false
+		p[player].pauseAt = -1
+		p[player].interval = 1
+		p[player].delay = 1
+		p[player].garbage = 0
+	end
+end
+
+local function initPiece()
+	for player = 1, 2 do
+		for col = 1, 20 do
+			p[player].board[col] = {}
+			for row = 1, 10 do
+				p[player].board[col][row] = 8
+			end
+		end
+		getRandomPiece(player)
+		paintStoredPiece(player, true)
+	end
+end
+
+local function replay(event)
+	if (event.isPrimaryButtonDown) then
+		winner = 0
+		gameOverGroup.isVisible = false
+		paintNextPiece(1, false)
+		paintNextPiece(2, false)
+		paintStoredPiece(1, false)
+		paintStoredPiece(2, false)
+		initVariables()
+		initPiece()
+	end
+end
+
+local function backToMain(event)
+	if (event.isPrimaryButtonDown) then composer.gotoScene("title") end
+end
+
+local function onP1KeyEvent(event) onKeyEvent(event, 1) end
+local function onP2KeyEvent(event) onKeyEvent(event, 2) end
+local function onP1KeepPressEvent() onKeepPressEvent(1) end
+local function onP2KeepPressEvent() onKeepPressEvent(2) end
+local function onP1FrameEvent() onFrameEvent(1) end
+local function onP2FrameEvent() onFrameEvent(2) end
 
 -- -----------------------------------------------------------------------------------
 -- Scene event functions
@@ -431,17 +647,6 @@ function scene:create( event )
 	local p1NextPieceArea = display.newRoundedRect(mainGroup, WIDTH / 4 - 11 * half, HEIGHT / 4, 10 * half, 10 * half, 10)
 	local p1StoredPieceArea = display.newRoundedRect(mainGroup, WIDTH / 4 - 11 * half, 3 * HEIGHT / 4, 10 * half, 10 * half, 10)
 
-	local p1String = display.newText({
-		parent = mainGroup,
-		text = "1P",
-		x = WIDTH / 4 - 11 * half,
-		y = HEIGHT / 2,
-		font = native.systemFont,
-		fontSize = 75,
-		align = "center"
-	})
-	p1String:setFillColor(0, 0, 0)
-
 	local p1NextPieceString = display.newText({
 		parent = mainGroup,
 		text = "NEXT",
@@ -452,6 +657,42 @@ function scene:create( event )
 		align = "center"
 	})
 	p1NextPieceString:setFillColor(0, 0, 0)
+
+	p[1].tspinInfoText = display.newText({
+		parent = mainGroup,
+		text = "tspin",
+		x = WIDTH / 4 - 11 * half,
+		y = 7 * HEIGHT / 16,
+		font = native.systemFont,
+		fontSize = 25,
+		align = "center"
+	})
+	p[1].tspinInfoText:setFillColor(0, 0, 0)
+	p[1].tspinInfoText.alpha = 0
+
+	p[1].clearInfoText = display.newText({
+		parent = mainGroup,
+		text = "lines",
+		x = WIDTH / 4 - 11 * half,
+		y = HEIGHT / 2,
+		font = native.systemFont,
+		fontSize = 50,
+		align = "center"
+	})
+	p[1].clearInfoText:setFillColor(0, 0, 0)
+	p[1].clearInfoText.alpha = 0
+
+	p[1].comboInfoText = display.newText({
+		parent = mainGroup,
+		text = "combo",
+		x = WIDTH / 4 - 11 * half,
+		y = 9 * HEIGHT / 16,
+		font = native.systemFont,
+		fontSize = 25,
+		align = "center"
+	})
+	p[1].comboInfoText:setFillColor(0, 0, 0)
+	p[1].comboInfoText.alpha = 0
 
 	local p1StoredPieceString = display.newText({
 		parent = mainGroup,
@@ -468,17 +709,6 @@ function scene:create( event )
 	local p2NextPieceArea = display.newRoundedRect(mainGroup, 3 * WIDTH / 4 + 11 * half, HEIGHT / 4, 10 * half, 10 * half, 10)
 	local p2StoredPieceArea = display.newRoundedRect(mainGroup, 3 * WIDTH / 4 + 11 * half, 3 * HEIGHT / 4, 10 * half, 10 * half, 10)
 	
-	local p2String = display.newText({
-		parent = mainGroup,
-		text = "2P",
-		x = 3 * WIDTH / 4 + 11 * half,
-		y = HEIGHT / 2,
-		font = native.systemFont,
-		fontSize = 75,
-		align = "center"
-	})
-	p2String:setFillColor(0, 0, 0)
-	
 	local p2NextPieceString = display.newText({
 		parent = mainGroup,
 		text = "NEXT",
@@ -489,6 +719,42 @@ function scene:create( event )
 		align = "center"
 	})
 	p2NextPieceString:setFillColor(0, 0, 0)
+
+	p[2].tspinInfoText = display.newText({
+		parent = mainGroup,
+		text = "tspin",
+		x = 3 * WIDTH / 4 + 11 * half,
+		y = 7 * HEIGHT / 16,
+		font = native.systemFont,
+		fontSize = 25,
+		align = "center"
+	})
+	p[2].tspinInfoText:setFillColor(0, 0, 0)
+	p[2].tspinInfoText.alpha = 0
+
+	p[2].clearInfoText = display.newText({
+		parent = mainGroup,
+		text = "lines",
+		x = 3 * WIDTH / 4 + 11 * half,
+		y = HEIGHT / 2,
+		font = native.systemFont,
+		fontSize = 50,
+		align = "center"
+	})
+	p[2].clearInfoText:setFillColor(0, 0, 0)
+	p[2].clearInfoText.alpha = 0
+
+	p[2].comboInfoText = display.newText({
+		parent = mainGroup,
+		text = "combo",
+		x = 3 * WIDTH / 4 + 11 * half,
+		y = 9 * HEIGHT / 16,
+		font = native.systemFont,
+		fontSize = 25,
+		align = "center"
+	})
+	p[2].comboInfoText:setFillColor(0, 0, 0)
+	p[2].comboInfoText.alpha = 0
 
 	local p2StoredPieceString = display.newText({
 		parent = mainGroup,
@@ -516,7 +782,7 @@ function scene:create( event )
 		for row = 1, 10 do
 			local grid = display.newRect(line, p1BoardX + (2 * row - 1) * half, (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
-			grid.strokeWidth = half / 25
+			grid.strokeWidth = half / 30
 		end
 		p[1].boardGroup:insert(line)
 	end
@@ -529,7 +795,7 @@ function scene:create( event )
 		for row = 1, 4 do
 			local grid = display.newRect(line, p1PieceX + (2 * row - 1) * half, nextY + (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
-			grid.strokeWidth = half / 25
+			grid.strokeWidth = half / 30
 		end
 		p[1].nextPieceGroup:insert(line)
 	end
@@ -542,9 +808,19 @@ function scene:create( event )
 		for row = 1, 4 do
 			local grid = display.newRect(line, p1PieceX + (2 * row - 1) * half, storedY + (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
-			grid.strokeWidth = half / 25
+			grid.strokeWidth = half / 30
 		end
 		p[1].storedPieceGroup:insert(line)
+	end
+
+	p[1].warningGroup = display.newGroup()
+	sceneGroup:insert(p[1].warningGroup)
+
+	for col = 1, 20 do
+		local grid = display.newRect(p[1].warningGroup, WIDTH / 2 - half, (2 * col - 1) * half, 2 * half, 2 * half)
+		grid:setFillColor(203 / 255, 125 / 255, 96 / 255)
+		grid:setStrokeColor(203 / 255, 125 / 255, 96 / 255)
+		grid.strokeWidth = half / 5
 	end
 
 	p[2].boardGroup = display.newGroup()
@@ -555,7 +831,7 @@ function scene:create( event )
 		for row = 1, 10 do
 			local grid = display.newRect(line, p2BoardX + (2 * row - 1) * half, (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
-			grid.strokeWidth = half / 25
+			grid.strokeWidth = half / 30
 		end
 		p[2].boardGroup:insert(line)
 	end
@@ -568,7 +844,7 @@ function scene:create( event )
 		for row = 1, 4 do
 			local grid = display.newRect(line, p2PieceX + (2 * row - 1) * half, nextY + (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
-			grid.strokeWidth = half / 25
+			grid.strokeWidth = half / 30
 		end
 		p[2].nextPieceGroup:insert(line)
 	end
@@ -581,9 +857,19 @@ function scene:create( event )
 		for row = 1, 4 do
 			local grid = display.newRect(line, p2PieceX + (2 * row - 1) * half, storedY + (2 * col - 1) * half, 2 * half, 2 * half)
 			grid:setStrokeColor(0.5, 0.5, 0.5, 0.8)
-			grid.strokeWidth = half / 25
+			grid.strokeWidth = half / 30
 		end
 		p[2].storedPieceGroup:insert(line)
+	end
+
+	p[2].warningGroup = display.newGroup()
+	sceneGroup:insert(p[2].warningGroup)
+
+	for col = 1, 20 do
+		local grid = display.newRect(p[2].warningGroup, WIDTH / 2 + half, (2 * col - 1) * half, 2 * half, 2 * half)
+		grid:setFillColor(203 / 255, 125 / 255, 96 / 255)
+		grid:setStrokeColor(203 / 255, 125 / 255, 96 / 255)
+		grid.strokeWidth = half / 5
 	end
 
 	pauseGroup = display.newGroup()
@@ -609,29 +895,41 @@ function scene:create( event )
 	gameOverAlert:setFillColor(1, 1, 1, 0.8)
 	gameOverAlert.alpha = 0.8
 
-	local finalLevelArea = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2 - 5 * half, 16 * half, 4 * half, 10)
+	local finalLevelArea = display.newRoundedRect(gameOverGroup, WIDTH / 2, HEIGHT / 2 - 5 * half, 8 * half, 4 * half, 10)
 	finalLevelArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 	finalLevelArea.alpha = 0.8
 
-	local finalLevelVarArea = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2 - 5 * half, 16 * half, 4 * half, 10)
-	finalLevelVarArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
-	finalLevelVarArea.alpha = 0.8
+	local finalP1LevelArea = display.newRoundedRect(gameOverGroup,  WIDTH / 2 - 11 * half, HEIGHT / 2 - 5 * half, 12 * half, 4 * half, 10)
+	finalP1LevelArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalP1LevelArea.alpha = 0.8
 
-	local finalLinesArea = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2, 16 * half, 4 * half, 10)
+	local finalP2LevelArea = display.newRoundedRect(gameOverGroup,  WIDTH / 2 + 11 * half, HEIGHT / 2 - 5 * half, 12 * half, 4 * half, 10)
+	finalP2LevelArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalP2LevelArea.alpha = 0.8
+
+	local finalLinesArea = display.newRoundedRect(gameOverGroup, WIDTH / 2, HEIGHT / 2, 8 * half, 4 * half, 10)
 	finalLinesArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 	finalLinesArea.alpha = 0.8
 
-	local finalLinesVarArea = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2, 16 * half, 4 * half, 10)
-	finalLinesVarArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
-	finalLinesVarArea.alpha = 0.8
+	local finalP1LinesArea = display.newRoundedRect(gameOverGroup, WIDTH / 2 - 11 * half, HEIGHT / 2, 12 * half, 4 * half, 10)
+	finalP1LinesArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalP1LinesArea.alpha = 0.8
 
-	local finalScoreArea = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2 + 5 * half, 16 * half, 4 * half, 10)
+	local finalP2LinesArea = display.newRoundedRect(gameOverGroup, WIDTH / 2 + 11 * half, HEIGHT / 2, 12 * half, 4 * half, 10)
+	finalP2LinesArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalP2LinesArea.alpha = 0.8
+
+	local finalScoreArea = display.newRoundedRect(gameOverGroup, WIDTH / 2, HEIGHT / 2 + 5 * half, 8 * half, 4 * half, 10)
 	finalScoreArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
 	finalScoreArea.alpha = 0.8
 
-	local finalScoreVarArea = display.newRoundedRect(gameOverGroup, 5 * WIDTH / 8, HEIGHT / 2 + 5 * half, 16 * half, 4 * half, 10)
-	finalScoreVarArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
-	finalScoreVarArea.alpha = 0.8
+	local finalP1ScoreArea = display.newRoundedRect(gameOverGroup, WIDTH / 2 - 11 * half, HEIGHT / 2 + 5 * half, 12 * half, 4 * half, 10)
+	finalP1ScoreArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalP1ScoreArea.alpha = 0.8
+
+	local finalP2ScoreArea = display.newRoundedRect(gameOverGroup, WIDTH / 2 + 11 * half, HEIGHT / 2 + 5 * half, 12 * half, 4 * half, 10)
+	finalP2ScoreArea:setFillColor(251 / 255, 206 / 255, 177 / 255, 0.8)
+	finalP2ScoreArea.alpha = 0.8
 
 	replayButton = display.newRoundedRect(gameOverGroup, 3 * WIDTH / 8, HEIGHT / 2 + 3 * WIDTH / 16, 16 * half, 6 * half, 10)
 	replayButton:setFillColor(203 / 255, 125 / 255, 96 / 255, 0.8)
@@ -655,68 +953,101 @@ function scene:create( event )
 	local finalLevelString = display.newText({
 		parent = gameOverGroup,
 		text = "LEVEL",
-		x = 3 * WIDTH / 8,
+		x = WIDTH / 2,
 		y = HEIGHT / 2 - 5 * half,
 		font = native.systemFont,
-		fontSize = 50,
+		fontSize = 40,
 		align = "center"
 	})
 	finalLevelString:setFillColor(0, 0, 0)
 
-	finalLevelText = display.newText({
+	finalP1LevelText = display.newText({
 		parent = gameOverGroup,
 		text = "Lorem Ipsum",
-		x = 5 * WIDTH / 8,
+		x = WIDTH / 2 - 11 * half,
 		y = HEIGHT / 2 - 5 * half,
 		font = native.systemFont,
-		fontSize = 50,
+		fontSize = 40,
 		align = "right"
 	})
-	finalLevelText:setFillColor(0, 0, 0)
+	finalP1LevelText:setFillColor(0, 0, 0)
+
+	finalP2LevelText = display.newText({
+		parent = gameOverGroup,
+		text = "Lorem Ipsum",
+		x = WIDTH / 2 + 11 * half,
+		y = HEIGHT / 2 - 5 * half,
+		font = native.systemFont,
+		fontSize = 40,
+		align = "left"
+	})
+	finalP2LevelText:setFillColor(0, 0, 0)
 
 	local finalLinesString = display.newText({
 		parent = gameOverGroup,
 		text = "LINES",
-		x = 3 * WIDTH / 8,
+		x = WIDTH / 2,
 		y = HEIGHT / 2,
 		font = native.systemFont,
-		fontSize = 50,
+		fontSize = 40,
 		align = "center"
 	})
 	finalLinesString:setFillColor(0, 0, 0)
 
-	finalLinesText = display.newText({
+	finalP1LinesText = display.newText({
 		parent = gameOverGroup,
 		text = "Lorem Ipsum",
-		x = 5 * WIDTH / 8,
+		x = WIDTH / 2 - 11 * half,
 		y = HEIGHT / 2,
 		font = native.systemFont,
-		fontSize = 50,
+		fontSize = 40,
 		align = "right"
 	})
-	finalLinesText:setFillColor(0, 0, 0)
+	finalP1LinesText:setFillColor(0, 0, 0)
+
+	finalP2LinesText = display.newText({
+		parent = gameOverGroup,
+		text = "Lorem Ipsum",
+		x = WIDTH / 2 + 11 * half,
+		y = HEIGHT / 2,
+		font = native.systemFont,
+		fontSize = 40,
+		align = "left"
+	})
+	finalP2LinesText:setFillColor(0, 0, 0)
 
 	local finalScoreString = display.newText({
 		parent = gameOverGroup,
 		text = "SCORE",
-		x = 3 * WIDTH / 8,
+		x = WIDTH / 2,
 		y = HEIGHT / 2 + 5 * half,
 		font = native.systemFont,
-		fontSize = 50,
+		fontSize = 40,
 		align = "center"
 	})
 	finalScoreString:setFillColor(0, 0, 0)
 
-	finalScoreText = display.newText({
+	finalP1ScoreText = display.newText({
 		parent = gameOverGroup,
 		text = "Lorem Ipsum",
-		x = 5 * WIDTH / 8,
+		x = WIDTH / 2 - 11 * half,
 		y = HEIGHT / 2 + 5 * half,
 		font = native.systemFont,
-		fontSize = 50,
+		fontSize = 40,
 		align = "right"
 	})
-	finalScoreText:setFillColor(0, 0, 0)
+	finalP1ScoreText:setFillColor(0, 0, 0)
+
+	finalP2ScoreText = display.newText({
+		parent = gameOverGroup,
+		text = "Lorem Ipsum",
+		x = WIDTH / 2 + 11 * half,
+		y = HEIGHT / 2 + 5 * half,
+		font = native.systemFont,
+		fontSize = 40,
+		align = "left"
+	})
+	finalP2ScoreText:setFillColor(0, 0, 0)
 
 	local replayText = display.newText({
 		parent = gameOverGroup,
@@ -740,18 +1071,8 @@ function scene:create( event )
 	})
 	backMainText:setFillColor(0, 0, 0)
 
-	for col = 1, 20 do
-		p[1].board[col] = {}
-		p[2].board[col] = {}
-		for row = 1, 10 do
-			p[1].board[col][row] = 8
-			p[2].board[col][row] = 8
-		end
-	end
-	getRandomPiece(1)
-	getRandomPiece(2)
-	paintStoredPiece(1, true)
-	paintStoredPiece(2, true)
+	initVariables()
+	initPiece()
 
 end
 
@@ -768,13 +1089,15 @@ function scene:show( event )
 	elseif ( phase == "did" ) then
 		-- Code here runs when the scene is entirely on screen
 
+		replayButton:addEventListener("mouse", replay)
+		backMainButton:addEventListener("mouse", backToMain)
 		Runtime:addEventListener("key", onCommonKeyEvent)
-		for player = 1, 2 do
-			Runtime:addEventListener("key", function(event) onKeyEvent(event, player) end)
-			Runtime:addEventListener("enterFrame", function() onKeepPressEvent(player) end)
-			Runtime:addEventListener("enterFrame", function() onFrameEvent(player) end)
-		end
-
+		Runtime:addEventListener("key", onP1KeyEvent)
+		Runtime:addEventListener("key", onP2KeyEvent)
+		Runtime:addEventListener("enterFrame", onP1KeepPressEvent)
+		Runtime:addEventListener("enterFrame", onP2KeepPressEvent)
+		Runtime:addEventListener("enterFrame", onP1FrameEvent)
+		Runtime:addEventListener("enterFrame", onP2FrameEvent)
 	end
 end
 
@@ -790,7 +1113,15 @@ function scene:hide( event )
 
 	elseif ( phase == "did" ) then
 		-- Code here runs immediately after the scene goes entirely off screen
-
+		
+		Runtime:removeEventListener("key", onCommonKeyEvent)
+		Runtime:removeEventListener("key", onP1KeyEvent)
+		Runtime:removeEventListener("key", onP2KeyEvent)
+		Runtime:removeEventListener("enterFrame", onP1KeepPressEvent)
+		Runtime:removeEventListener("enterFrame", onP2KeepPressEvent)
+		Runtime:removeEventListener("enterFrame", onP1FrameEvent)
+		Runtime:removeEventListener("enterFrame", onP2FrameEvent)
+		composer.removeScene("pvp")
 	end
 end
 
