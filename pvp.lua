@@ -31,7 +31,6 @@ local replayButton
 local backMainButton
 
 local keyboard = {}
-local queue = {}
 local winner = 0
 
 --[=[
@@ -55,14 +54,6 @@ local p =
 		tspinInfoText,
 		clearInfoText,
 		comboInfoText,
-		cw0 = "i",
-		right = "l",
-		left = "j",
-		soft = "k",
-		hard = "s",
-		cw = "d",
-		ccw = "a",
-		hold = "w",
 	},
 	{ -- P2
 		boardGroup,
@@ -72,14 +63,6 @@ local p =
 		tspinInfoText,
 		clearInfoText,
 		comboInfoText,
-		cw0 = "numPad8",
-		right = "numPad6",
-		left = "numPad4",
-		soft = "numPad5",
-		hard = "down",
-		cw = "right",
-		ccw = "left",
-		hold = "up",
 	}
 }
 
@@ -104,7 +87,7 @@ end
 
 
 local function checkTspin(player)
-	if (p[player].nowPieceId == 3 and p[player].spin == true) then
+	if (p[player].nowPieceId == 5 and p[player].spin == true) then
 		
 		local corner = {[0] = 0, -1,-1, 1,-1, 1,1, -1,1 }
 		for j = 1, p[player].piece[0] do
@@ -323,7 +306,7 @@ local function move(player, dx, dy, arr)
 	for i = 1, 4 do
 		local x = p[player].pos.x + dx + temp[2 * i - 1]
 		local y = p[player].pos.y + dy + temp[2 * i]
-		if (y > 20 or x < 1 or x > 10 or p[player].board[y][x] < 8) then return false end
+		if (y > 20 or x < 1 or x > 16 or p[player].board[y][x] < 8) then return false end
 	end
 	for i = 0, 8 do p[player].piece[i] = temp[i] end
 	p[player].pos.x = p[player].pos.x + dx
@@ -419,7 +402,7 @@ end
 local function onKeyEvent(event, player)
 	if (gameOverGroup.isVisible == false and pauseGroup.isVisible == false) then
 		if (event.phase == "down") then
-			if (event.keyName == p[player].hold and p[player].changePiece == false) then
+			if (event.keyName == const.config[player].hold and p[player].changePiece == false) then
 				paintStoredPiece(player, false)
 				paintNowPiece(player, false)
 				paintGhost(player, false)
@@ -431,7 +414,7 @@ local function onKeyEvent(event, player)
 				paintNowPiece(player, true)
 				paintStoredPiece(player, true)
 			end
-			if (event.keyName == p[player].hard) then
+			if (event.keyName == const.config[player].hard) then
 				paintNowPiece(player, false)
 				paintGhost(player, false)
 				p[player].pos.y = p[player].ghostY
@@ -440,25 +423,25 @@ local function onKeyEvent(event, player)
 				paintGhost(player, true)
 				paintNowPiece(player, true)
 			end
-			if (event.keyName == p[player].cw0 or event.keyName == p[player].cw) then
+			if (event.keyName == const.config[player].cw0 or event.keyName == const.config[player].cw) then
 				paintNowPiece(player, false)
 				paintGhost(player, false)
 				p[player].spin = rotate(player, 1)
 				paintGhost(player, true)
 				paintNowPiece(player, true)
 			end
-			if (event.keyName == p[player].ccw) then
+			if (event.keyName == const.config[player].ccw) then
 				paintNowPiece(player, false)
 				paintGhost(player, false)
 				p[player].spin = rotate(player, -1)
 				paintGhost(player, true)
 				paintNowPiece(player, true)
 			end
-			if (event.keyName == p[player].right or event.keyName == p[player].left or event.keyName == p[player].soft) then
+			if (event.keyName == const.config[player].right or event.keyName == const.config[player].left or event.keyName == const.config[player].soft) then
 				p[player].delay = 1
 				keyboard[event.keyName] = true
 			end
-		elseif (event.keyName == p[player].right or event.keyName == p[player].left or event.keyName == p[player].soft) then
+		elseif (event.keyName == const.config[player].right or event.keyName == const.config[player].left or event.keyName == const.config[player].soft) then
 			keyboard[event.keyName] = false
 		end
 	end
@@ -470,7 +453,7 @@ local function onKeepPressEvent(player)
 
 	if (p[player].delay == 0) then
 
-		if keyboard[p[player].soft] then
+		if keyboard[const.config[player].soft] then
 			paintNowPiece(player, false)
 			paintGhost(player, false)
 			move(player, 0, 1)
@@ -480,7 +463,7 @@ local function onKeepPressEvent(player)
 			paintNowPiece(player, true)
 		end
 
-		if keyboard[p[player].right] then
+		if keyboard[const.config[player].right] then
 			paintNowPiece(player, false)
 			paintGhost(player, false)
 			move(player, 1, 0)
@@ -489,7 +472,7 @@ local function onKeepPressEvent(player)
 			paintNowPiece(player, true)
 		end
 
-		if keyboard[p[player].left] then
+		if keyboard[const.config[player].left] then
 			paintNowPiece(player, false)
 			paintGhost(player, false)
 			move(player, -1, 0)
@@ -551,12 +534,14 @@ local function onFrameEvent(player)
 			p[player].levelText = p[player].level
 		end
 
-		if (p[player].level > 30) then winner = player end
-
-		if (p[player].pos.y == p[player].ghostY) then
-			p[player].interval = 15
-		else 
-			p[player].interval = 31 - p[player].level
+		if (p[player].level > 30) then
+			winner = player
+		else
+			if (p[player].pos.y == p[player].ghostY) then
+				p[player].interval = 15
+			else 
+				p[player].interval = 31 - p[player].level
+			end
 		end
 	end
 end
@@ -566,13 +551,13 @@ local function initVariables()
 		p[player].ghostY = 20
 		p[player].pos = {x = 5, y = 20}
 		p[player].piece = { [0] = 0, 0,0, 0,0, 0,0, 0,0 }
-		p[player].board = {[-2] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [-1] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, [0] = {8, 8, 8, 8, 8, 8, 8, 8, 8, 8}}
+		p[player].board = {}
 		p[player].count = {}
 		p[player].box = {}
 		p[player].bag = {}
 		p[player].nowPieceId = 8
 		p[player].nextPieceId = 8
-		p[player].storedPieceId = 1
+		p[player].storedPieceId = 3
 		p[player].changePiece = false
 		p[player].score = 0
 		p[player].lines = 0
@@ -592,7 +577,7 @@ end
 
 local function initPiece()
 	for player = 1, 2 do
-		for col = 1, 20 do
+		for col = -2, 20 do
 			p[player].board[col] = {}
 			for row = 1, 10 do
 				p[player].board[col][row] = 8
