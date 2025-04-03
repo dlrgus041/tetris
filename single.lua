@@ -565,6 +565,9 @@ local function initPiece()
 	end
 	getRandomPiece()
 	paintStoredPiece(true)
+	levelVarText.text = level
+	linesVarText.text = line
+	scoreVarText.text = score
 end
 
 local function replay(event)

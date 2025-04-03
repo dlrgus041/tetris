@@ -53,31 +53,6 @@ local function scanBoard()
 	end
 end
 
-local function rearrangeBoard()
-	local temp = {}
-	for i = 1, 20 do temp[i] = i end
-	for y = 20, 1, -1 do
-		if (count[y] == 16) then table.remove(temp, y) end
-	end
-	for i = 0, #temp - 1 do
-		board[#count - i] = board[temp[#temp - i]]
-		count[#count - i] = count[temp[#temp - i]]
-	end
-	for i = 1, #count - #temp do
-		for x = 1, 16 do board[i][x] = 8 end
-		count[i] = 0
-	end
-end
-
-local function paintBoard()
-	for y = 1, 20 do
-		for x = 1, 16 do
-			local rgb = const.color[board[y][x]]
-			boardGroup[y][x]:setFillColor(rgb[1], rgb[2], rgb[3])
-		end
-	end
-end
-
 local function willBeCollide(player, x1, y1)
 	for i = 1, 4 do
 		local x0 = p[3 - player].pos.x + p[3 - player].piece[2 * i - 1]
@@ -143,6 +118,33 @@ local function paintStoredPiece(player, flag)
 	for i = 1, 4 do
 		p[player].storedPieceGroup[3 + const.pieces[p[player].storedPieceId][2 * i]][3 + const.pieces[p[player].storedPieceId][2 * i - 1]]:setFillColor(rgb[1], rgb[2], rgb[3])
 	end
+end
+
+local function rearrangeBoard()
+	local temp = {}
+	for i = 1, 20 do temp[i] = i end
+	for y = 20, 1, -1 do
+		if (count[y] == 16) then table.remove(temp, y) end
+	end
+	for i = 0, #temp - 1 do
+		count[#count - i] = count[temp[#temp - i]]
+		for x = 1, 16 do
+			board[#count - i][x] = board[temp[#temp - i]][x]
+		end
+	end
+	for i = 1, #count - #temp do
+		count[i] = 0
+		for x = 1, 16 do board[i][x] = 8 end
+	end
+	for y = 1, 20 do
+		for x = 1, 16 do
+			local rgb = const.color[board[y][x]]
+			boardGroup[y][x]:setFillColor(rgb[1], rgb[2], rgb[3])
+		end
+	end
+	paintGhost(1, true)
+	paintGhost(2, true)
+	paintNowPiece(3 - player, true)
 end
 
 local function getRandomPiece(player)
@@ -360,11 +362,10 @@ local function onFrameEvent(player)
 			if (count[0] > 0) then
 				isDone = true
 			else
-				rearrangeBoard()
-				paintBoard()
 				getRandomPiece(player)
 				createPiece(player)
-				paintGhost(player, true)
+				rearrangeBoard()
+--				paintGhost(player, true)
 			end
 		end
 
